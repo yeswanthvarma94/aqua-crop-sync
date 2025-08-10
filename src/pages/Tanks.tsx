@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,59 +12,15 @@ import { useSelection } from "@/state/SelectionContext";
 import { cropDayFromStartIST, nowIST } from "@/lib/time";
 import { useToast } from "@/hooks/use-toast";
 import { enqueueChange } from "@/lib/approvals";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/state/AuthContext";
 
 interface Tank { id: string; locationId: string; name: string; type: "shrimp" | "fish" }
 
 interface TankDetail {
   seedDate?: string;
-  seedWeight?: number;
-  plSize?: number;
-  totalSeed?: number;
-  areaAcres?: number;
-  price?: number;
   cropEnd?: string;
 }
-
-const loadDetail = (tankId: string): TankDetail | null => {
-  try {
-    const raw = localStorage.getItem(`tankDetail:${tankId}`);
-    return raw ? (JSON.parse(raw) as TankDetail) : null;
-  } catch {
-    return null;
-  }
-};
-
-const saveDetail = (tankId: string, detail: TankDetail) => {
-  localStorage.setItem(`tankDetail:${tankId}`, JSON.stringify(detail));
-};
-
-const clearDetail = (tankId: string) => {
-  localStorage.removeItem(`tankDetail:${tankId}`);
-};
-
-const pushRecycleBin = (endedDetail: TankDetail & { tankId: string }) => {
-  try {
-    const raw = localStorage.getItem("recycleBin.crops");
-    const arr = raw ? (JSON.parse(raw) as any[]) : [];
-    arr.unshift(endedDetail);
-    localStorage.setItem("recycleBin.crops", JSON.stringify(arr));
-  } catch {
-    // no-op
-  }
-};
-
-const loadTanks = (): Tank[] => {
-  try {
-    const raw = localStorage.getItem("tanks");
-    return raw ? (JSON.parse(raw) as Tank[]) : [];
-  } catch {
-    return [];
-  }
-};
-
-const saveTanks = (list: Tank[]) => {
-  localStorage.setItem("tanks", JSON.stringify(list));
-};
 
 const useSEO = (title: string, description: string) => {
   useEffect(() => {
@@ -88,9 +45,11 @@ const Tanks = () => {
   const [open, setOpen] = useState(false);
   const [formName, setFormName] = useState("");
   const [formType, setFormType] = useState<"shrimp" | "fish">("fish");
-  const [tanksAll, setTanksAll] = useState<Tank[]>(() => loadTanks());
+  const [tanksAll, setTanksAll] = useState<Tank[]>([]);
   const { toast } = useToast();
   const [rev, setRev] = useState(0);
+  const { accountId } = useAuth();
+
   useSEO("Tanks | AquaLedger", "Manage tanks for the selected location. Add, view, and open details.");
 
   // Ensure selection context includes this location id
@@ -101,13 +60,44 @@ const Tanks = () => {
     }
   }, [location, locationId, setLocation]);
 
+  const loadTanks = async () => {
+    if (!locationId) return;
+    const { data, error } = await supabase
+      .from("tanks")
+      .select("id, name, type, location_id")
+      .eq("location_id", locationId)
+      .order("created_at", { ascending: false });
+    if (!error) {
+      const mapped = (data || []).map((t: any) => ({ id: t.id, name: t.name, type: t.type, locationId: t.location_id })) as Tank[];
+      setTanksAll(mapped);
+    }
+  };
+
+  useEffect(() => {
+    loadTanks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locationId, rev]);
+
+  const [activeCrops, setActiveCrops] = useState<Record<string, TankDetail>>({});
+  const loadActiveCrops = async (tankIds: string[]) => {
+    if (tankIds.length === 0) { setActiveCrops({}); return; }
+    const { data } = await supabase
+      .from("tank_crops")
+      .select("tank_id, seed_date, end_date")
+      .in("tank_id", tankIds)
+      .is("end_date", null);
+    const map: Record<string, TankDetail> = {};
+    (data || []).forEach((row: any) => {
+      map[row.tank_id] = { seedDate: row.seed_date, cropEnd: row.end_date || undefined };
+    });
+    setActiveCrops(map);
+  };
+
+  useEffect(() => {
+    loadActiveCrops(tanksAll.map(t => t.id));
+  }, [tanksAll]);
+
   const tanks = useMemo(() => tanksAll.filter((t) => t.locationId === locationId), [tanksAll, locationId]);
-  const details = useMemo(() => {
-    const map = new Map<string, TankDetail | null>();
-    const list = tanksAll.filter((t) => t.locationId === locationId);
-    list.forEach((t) => map.set(t.id, loadDetail(t.id)));
-    return map;
-  }, [tanksAll, locationId, rev]);
 
   const handleSelectTank = (t: Tank) => {
     setTank({ id: t.id, name: t.name, type: t.type });
@@ -115,31 +105,26 @@ const Tanks = () => {
   };
 
   const isValid = formName.trim().length > 0;
-  const onCreateTank = () => {
+  const onCreateTank = async () => {
     if (!locationId || !isValid) return;
-    const newTank: Tank = { id: crypto.randomUUID(), locationId, name: formName.trim(), type: formType };
-    enqueueChange("tanks/create", { tank: newTank }, `Tank: ${newTank.name}`);
+    const payload = { tank: { id: crypto.randomUUID(), locationId, name: formName.trim(), type: formType, account_id: accountId } };
+    await enqueueChange("tanks/create", payload as any, `Tank: ${payload.tank.name}`);
     setOpen(false);
     setFormName("");
     setFormType("fish");
-    toast({ title: "Submitted for approval", description: `${newTank.name}` });
+    toast({ title: "Submitted for approval", description: `${payload.tank.name}` });
   };
 
-  const onStartCrop = (t: Tank) => {
+  const onStartCrop = async (t: Tank) => {
     const now = nowIST();
-    enqueueChange("tanks/start_crop", { tankId: t.id, iso: now.toISOString() }, `Start crop — ${t.name}`);
+    await enqueueChange("tanks/start_crop", { tankId: t.id, iso: now.toISOString() }, `Start crop — ${t.name}`);
     setRev((r) => r + 1);
     toast({ title: "Submitted for approval", description: `${t.name}: start crop` });
   };
 
-  const onEndCrop = (t: Tank) => {
-    const existing = loadDetail(t.id);
-    if (!existing || !existing.seedDate) {
-      toast({ title: "No active crop", description: `${t.name}: Start a crop first.` });
-      return;
-    }
+  const onEndCrop = async (t: Tank) => {
     const now = new Date();
-    enqueueChange("tanks/end_crop", { tankId: t.id, iso: now.toISOString() }, `End crop — ${t.name}`);
+    await enqueueChange("tanks/end_crop", { tankId: t.id, iso: now.toISOString() }, `End crop — ${t.name}`);
     setRev((r) => r + 1);
     toast({ title: "Submitted for approval", description: `${t.name}: end crop` });
   };
@@ -197,10 +182,6 @@ const Tanks = () => {
                 <TableHead>Name</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Seed Date</TableHead>
-                <TableHead>Seed Info</TableHead>
-                <TableHead>Total Seed</TableHead>
-                <TableHead>Area (acres)</TableHead>
-                <TableHead>Price</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
@@ -208,20 +189,16 @@ const Tanks = () => {
             <TableBody>
               {tanks.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center text-muted-foreground">No tanks found for this location.</TableCell>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground">No tanks found for this location.</TableCell>
                 </TableRow>
               ) : (
                 tanks.map((t) => {
-                  const d = details.get(t.id);
+                  const d = activeCrops[t.id];
                   return (
                     <TableRow key={t.id} onClick={() => handleSelectTank(t)} className="cursor-pointer">
                       <TableCell className="font-medium">{t.name}</TableCell>
                       <TableCell className="capitalize">{t.type}</TableCell>
                       <TableCell>{d?.seedDate ? new Date(d.seedDate).toLocaleDateString() : "—"}</TableCell>
-                      <TableCell>{t.type === "fish" ? (d?.seedWeight != null ? `${d.seedWeight} g` : "—") : (d?.plSize != null ? `PL ${d.plSize}` : "—")}</TableCell>
-                      <TableCell>{d?.totalSeed ?? "—"}</TableCell>
-                      <TableCell>{d?.areaAcres ?? "—"}</TableCell>
-                      <TableCell>{d?.price ?? "—"}</TableCell>
                       <TableCell>{d?.seedDate && !d?.cropEnd ? `Day ${cropDayFromStartIST(new Date(d.seedDate))}` : d?.cropEnd ? `Ended` : "—"}</TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         {d?.seedDate && !d?.cropEnd ? (

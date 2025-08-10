@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useState } from "react";
 import HeaderPickers from "@/components/HeaderPickers";
 import TabBar from "@/components/TabBar";
@@ -14,6 +15,8 @@ import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { useEffect as ReactUseEffect } from "react";
 import { enqueueChange } from "@/lib/approvals";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/state/AuthContext";
 
 // Types reused from Stocks
 interface StockRecord {
@@ -43,32 +46,6 @@ interface MaterialLogEntry {
   createdAt: string; // ISO
 }
 
-const stockKey = (locationId: string) => `stocks:${locationId}`;
-const loadStocks = (locationId: string): StockRecord[] => {
-  try {
-    const raw = localStorage.getItem(stockKey(locationId));
-    return raw ? (JSON.parse(raw) as StockRecord[]) : [];
-  } catch {
-    return [];
-  }
-};
-const saveStocks = (locationId: string, items: StockRecord[]) => {
-  localStorage.setItem(stockKey(locationId), JSON.stringify(items));
-};
-
-const logsKey = (locationId: string, tankId: string, dateKey: string) => `materials:logs:${locationId}:${tankId}:${dateKey}`;
-const loadLogs = (locationId: string, tankId: string, dateKey: string): MaterialLogEntry[] => {
-  try {
-    const raw = localStorage.getItem(logsKey(locationId, tankId, dateKey));
-    return raw ? (JSON.parse(raw) as MaterialLogEntry[]) : [];
-  } catch {
-    return [];
-  }
-};
-const saveLogs = (locationId: string, tankId: string, dateKey: string, list: MaterialLogEntry[]) => {
-  localStorage.setItem(logsKey(locationId, tankId, dateKey), JSON.stringify(list));
-};
-
 const useSEO = (title: string, description: string) => {
   ReactUseEffect(() => {
     document.title = title;
@@ -89,6 +66,7 @@ const Materials = () => {
   const { location, tank } = useSelection();
   const { toast } = useToast();
   const todayKey = format(new Date(), "yyyy-MM-dd");
+  const { accountId } = useAuth();
 
   useSEO("Materials | AquaLedger", "Log medicines, minerals, and other materials; auto-deduct stock and see low-stock alerts.");
 
@@ -107,18 +85,70 @@ const Materials = () => {
   const [entries, setEntries] = useState<MaterialLogEntry[]>([]);
   const [rev, setRev] = useState(0);
 
+  const loadStocks = async (locationId: string) => {
+    const { data, error } = await supabase
+      .from("stocks")
+      .select("id, name, category, unit, quantity, price_per_unit, min_stock, expiry_date, notes, created_at, created_at")
+      .eq("location_id", locationId)
+      .order("created_at", { ascending: false });
+    if (!error) {
+      const mapped: StockRecord[] = (data || []).map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        category: s.category,
+        unit: s.unit,
+        quantity: Number(s.quantity || 0),
+        pricePerUnit: Number(s.price_per_unit || 0),
+        totalAmount: Number(s.total_amount || 0),
+        minStock: Number(s.min_stock || 0),
+        expiryDate: s.expiry_date || undefined,
+        notes: s.notes || undefined,
+        createdAt: s.created_at,
+        updatedAt: s.created_at,
+      }));
+      setStocks(mapped);
+    }
+  };
+
+  const loadLogs = async (locationId: string, tankId: string, dateKey: string) => {
+    const start = new Date(`${dateKey}T00:00:00.000Z`);
+    const end = new Date(`${dateKey}T23:59:59.999Z`);
+    const { data, error } = await supabase
+      .from("material_logs")
+      .select("id, stock_id, quantity, time, notes, tank_id, location_id")
+      .eq("location_id", locationId)
+      .eq("tank_id", tankId)
+      .gte("time", start.toISOString())
+      .lte("time", end.toISOString())
+      .order("time", { ascending: true });
+    if (!error) {
+      const mapped: MaterialLogEntry[] = (data || []).map((e: any) => ({
+        tankId: e.tank_id,
+        stockId: e.stock_id,
+        stockName: "", // not joined to keep simple
+        category: "others",
+        unit: "kg",
+        quantity: Number(e.quantity),
+        time: new Date(e.time).toISOString().slice(11, 16),
+        notes: e.notes || undefined,
+        createdAt: e.time,
+      }));
+      setEntries(mapped);
+    }
+  };
+
   useEffect(() => {
-    if (location?.id) setStocks(loadStocks(location.id));
+    if (location?.id) loadStocks(location.id);
   }, [location?.id, rev]);
 
   useEffect(() => {
-    if (location?.id && tank?.id) setEntries(loadLogs(location.id, tank.id, todayKey));
+    if (location?.id && tank?.id) loadLogs(location.id, tank.id, todayKey);
   }, [location?.id, tank?.id, todayKey, rev]);
 
   const lowStocks = useMemo(() => nonFeedStocks.filter(s => s.minStock > 0 && s.quantity < s.minStock), [nonFeedStocks]);
   const remaining = selectedStock?.quantity ?? 0;
 
-  const saveUsage = () => {
+  const saveUsage = async () => {
     if (!location?.id || !tank?.id) return;
     if (!selectedStock) {
       toast({ title: "Select material", description: "Choose a material stock." });
@@ -145,7 +175,8 @@ const Materials = () => {
       createdAt: new Date().toISOString(),
     };
 
-    enqueueChange("materials/log", {
+    await enqueueChange("materials/log", {
+      accountId,
       locationId: location.id,
       tankId: tank.id,
       dateKey: todayKey,
@@ -264,7 +295,7 @@ const Materials = () => {
                     ) : (
                       entries.map((e, i) => (
                         <TableRow key={i}>
-                          <TableCell className="font-medium">{e.stockName}</TableCell>
+                          <TableCell className="font-medium">{e.stockName || e.stockId}</TableCell>
                           <TableCell>{e.quantity}</TableCell>
                           <TableCell className="uppercase">{e.unit}</TableCell>
                           <TableCell className="capitalize">{e.category}</TableCell>

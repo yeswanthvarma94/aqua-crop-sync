@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/integrations/supabase/client";
+import { ensureDefaultAccount, getMembershipRole, getActiveAccountId, setActiveAccountId } from "@/lib/account";
 
 export type UserRole = "owner" | "manager" | "partner";
 export type UserStatus = "active" | "disabled";
@@ -16,6 +17,7 @@ export interface User {
 
 interface AuthContextValue {
   user: User | null;
+  accountId: string | null;
   signInDev: (role?: UserRole) => Promise<void>;
   signInLocal: (username: string, password: string) => Promise<{ ok: boolean; message?: string }>;
   signOut: () => Promise<void>;
@@ -38,6 +40,7 @@ const hashPassword = async (pw: string) => {
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [accountId, setAccountId] = useState<string | null>(getActiveAccountId());
 
   const isDevLoginEnabled = import.meta.env.MODE === "development";
 
@@ -57,14 +60,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           name: (sUser.user_metadata?.name as string) || sUser.email || sUser.phone || "User",
           email: sUser.email || undefined,
           phone: (sUser as any).phone || undefined,
-          role: "manager", // default; team roles via local login
+          role: "manager",
           status: "active",
         };
         setUser(mapped);
+
+        // Defer backend calls to avoid deadlocks
+        setTimeout(async () => {
+          try {
+            const accId = await ensureDefaultAccount(sUser.id);
+            setAccountId(accId);
+            setActiveAccountId(accId);
+            const role = (await getMembershipRole(accId, sUser.id)) || "manager";
+            setUser((prev) => (prev ? { ...prev, role } : prev));
+          } catch (e) {
+            console.error("Account bootstrap failed:", e);
+          }
+        }, 0);
       } else {
         // Don't force logout of dev/local user here; only clear if no local session persisted
         const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) setUser(null);
+        if (!raw) {
+          setUser(null);
+          setAccountId(null);
+        }
       }
     });
 
@@ -81,6 +100,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           status: "active",
         };
         setUser(mapped);
+        // Defer follow-up
+        setTimeout(async () => {
+          try {
+            const accId = await ensureDefaultAccount(sUser.id);
+            setAccountId(accId);
+            setActiveAccountId(accId);
+            const role = (await getMembershipRole(accId, sUser.id)) || "manager";
+            setUser((prev) => (prev ? { ...prev, role } : prev));
+          } catch (e) {
+            console.error("Account bootstrap failed:", e);
+          }
+        }, 0);
       }
     });
 
@@ -105,6 +136,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       status: "active",
     };
     setUser(devUser);
+    // Simulate a default account for dev
+    const devAcc = getActiveAccountId() || crypto.randomUUID();
+    setAccountId(devAcc);
+    setActiveAccountId(devAcc);
   };
 
   const signInLocal = async (username: string, password: string) => {
@@ -117,6 +152,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (h !== u.passwordHash) return { ok: false, message: "Invalid username or password" };
       const mapped: User = { id: u.id, name: u.name, role: u.role, status: "active" } as User;
       setUser(mapped);
+      // Keep previous active account if any
+      setAccountId(getActiveAccountId());
       return { ok: true };
     } catch (e) {
       return { ok: false, message: (e as Error).message };
@@ -126,13 +163,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signOut = async () => {
     try { await supabase.auth.signOut({ scope: "global" } as any); } catch {}
     setUser(null);
+    setAccountId(null);
   };
 
   const hasRole = (roles: UserRole[]) => (user ? roles.includes(user.role) : false);
 
   const value = useMemo(
-    () => ({ user, signInDev, signInLocal, signOut, hasRole, isDevLoginEnabled }),
-    [user, isDevLoginEnabled]
+    () => ({ user, accountId, signInDev, signInLocal, signOut, hasRole, isDevLoginEnabled }),
+    [user, accountId, isDevLoginEnabled]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

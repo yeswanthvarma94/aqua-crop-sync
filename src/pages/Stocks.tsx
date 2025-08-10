@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useSelection } from "@/state/SelectionContext";
@@ -17,6 +18,8 @@ import { cn } from "@/lib/utils";
 import { differenceInCalendarDays, format } from "date-fns";
 import { formatIST, nowIST } from "@/lib/time";
 import { enqueueChange } from "@/lib/approvals";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/state/AuthContext";
 
 interface StockRecord {
   id: string;
@@ -32,21 +35,6 @@ interface StockRecord {
   createdAt: string;
   updatedAt: string;
 }
-
-const STORAGE_KEY = (locationId: string) => `stocks:${locationId}`;
-
-const loadStocks = (locationId: string): StockRecord[] => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY(locationId));
-    return raw ? (JSON.parse(raw) as StockRecord[]) : [];
-  } catch {
-    return [];
-  }
-};
-
-const saveStocks = (locationId: string, list: StockRecord[]) => {
-  localStorage.setItem(STORAGE_KEY(locationId), JSON.stringify(list));
-};
 
 const useSEO = (title: string, description: string) => {
   useEffect(() => {
@@ -68,9 +56,10 @@ const Stocks = () => {
   const navigate = useNavigate();
   const { location, setLocation } = useSelection();
   const { toast } = useToast();
+  const { accountId } = useAuth();
 
   const [open, setOpen] = useState(false);
-  const [stocks, setStocks] = useState<StockRecord[]>(() => (locationId ? loadStocks(locationId) : []));
+  const [stocks, setStocks] = useState<StockRecord[]>([]);
   const [rev, setRev] = useState(0);
 
   // Form state
@@ -91,8 +80,35 @@ const Stocks = () => {
     if (!location && locationId) setLocation({ id: locationId, name: locationId });
   }, [location, locationId, setLocation]);
 
+  const load = async () => {
+    if (!locationId) return;
+    const { data, error } = await supabase
+      .from("stocks")
+      .select("id, name, category, unit, quantity, price_per_unit, min_stock, expiry_date, notes, created_at, created_at")
+      .eq("location_id", locationId)
+      .order("created_at", { ascending: false });
+    if (!error) {
+      const mapped: StockRecord[] = (data || []).map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        category: s.category,
+        unit: s.unit,
+        quantity: Number(s.quantity || 0),
+        pricePerUnit: Number(s.price_per_unit || 0),
+        totalAmount: Number(s.total_amount || 0),
+        minStock: Number(s.min_stock || 0),
+        expiryDate: s.expiry_date || undefined,
+        notes: s.notes || undefined,
+        createdAt: s.created_at,
+        updatedAt: s.created_at,
+      }));
+      setStocks(mapped);
+    }
+  };
+
   useEffect(() => {
-    if (locationId) setStocks(loadStocks(locationId));
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locationId, rev]);
 
   const existingNames = useMemo(() => Array.from(new Set(stocks.map(s => s.name))).sort(), [stocks]);
@@ -114,7 +130,7 @@ const Stocks = () => {
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!locationId) return;
     const name = isOther ? otherName.trim() : selectedName.trim();
     if (!name) {
@@ -132,7 +148,8 @@ const Stocks = () => {
 
     const now = nowIST().toISOString();
 
-    enqueueChange("stocks/upsert", {
+    await enqueueChange("stocks/upsert", {
+      accountId,
       locationId,
       name,
       category,

@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,27 +10,15 @@ import { Label } from "@/components/ui/label";
 import { Pencil, Trash2, ListTree } from "lucide-react";
 import { useSelection } from "@/state/SelectionContext";
 import { enqueueChange } from "@/lib/approvals";
+import { useAuth } from "@/state/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Location {
   id: string;
   name: string;
   address?: string;
+  account_id?: string;
 }
-
-const STORAGE_KEY = "locations";
-
-const loadLocations = (): Location[] => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Location[]) : [];
-  } catch {
-    return [];
-  }
-};
-
-const saveLocations = (list: Location[]) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-};
 
 const useSEO = (title: string, description: string) => {
   useEffect(() => {
@@ -50,8 +39,9 @@ const Locations = () => {
   useSEO("Locations | AquaLedger", "Manage farm locations: list, create, edit, delete.");
   const navigate = useNavigate();
   const { setLocation, setTank } = useSelection();
+  const { accountId } = useAuth();
 
-  const [locations, setLocations] = useState<Location[]>(() => loadLocations());
+  const [locations, setLocations] = useState<Location[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Location | null>(null);
   const [form, setForm] = useState<Pick<Location, "name" | "address">>({ name: "", address: "" });
@@ -63,16 +53,33 @@ const Locations = () => {
     setForm({ name: "", address: "" });
   };
 
-  const onSubmit = () => {
+  const load = async () => {
+    if (!accountId) return;
+    const { data, error } = await supabase
+      .from("locations")
+      .select("id, name, address, account_id")
+      .eq("account_id", accountId)
+      .order("created_at", { ascending: false });
+    if (!error) setLocations(data as any);
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountId]);
+
+  const onSubmit = async () => {
     if (!isValid) return;
+    if (!accountId) return;
     if (editing) {
-      enqueueChange("locations/update", { id: editing.id, updates: { name: form.name.trim(), address: form.address?.trim() } }, `Update Location: ${editing.name}`);
+      await enqueueChange("locations/update", { id: editing.id, updates: { name: form.name.trim(), address: form.address?.trim() } }, `Update Location: ${editing.name}`);
     } else {
-      const newLoc: Location = { id: crypto.randomUUID(), name: form.name.trim(), address: form.address?.trim() };
-      enqueueChange("locations/create", { location: newLoc }, `Create Location: ${newLoc.name}`);
+      const newLoc: Location = { id: crypto.randomUUID(), name: form.name.trim(), address: form.address?.trim(), account_id: accountId };
+      await enqueueChange("locations/create", { location: newLoc }, `Create Location: ${newLoc.name}`);
     }
     setOpen(false);
     resetForm();
+    load();
   };
 
   const onEdit = (loc: Location) => {
@@ -81,8 +88,9 @@ const Locations = () => {
     setOpen(true);
   };
 
-  const onDelete = (id: string) => {
-    enqueueChange("locations/delete", { id }, `Delete Location`);
+  const onDelete = async (id: string) => {
+    await enqueueChange("locations/delete", { id }, `Delete Location`);
+    load();
   };
 
   const openTanks = (loc: Location) => {
