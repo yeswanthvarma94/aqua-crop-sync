@@ -1,12 +1,52 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import HeaderPickers from "@/components/HeaderPickers";
+import SyncBadge from "@/components/SyncBadge";
+import QuickActionsGrid from "@/components/QuickActionsGrid";
+import TabBar from "@/components/TabBar";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useAuth } from "@/state/AuthContext";
+import { formatIST, nowIST } from "@/lib/time";
 
 const Index = () => {
+  const { user } = useAuth();
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
+    <div className="min-h-screen bg-background">
+      <header className="sticky top-0 z-10 bg-background/90 backdrop-blur border-b">
+        <div className="max-w-screen-md mx-auto px-4 py-3 flex items-center justify-between">
+          <div>
+            <h1 className="text-lg font-semibold">AquaLedger</h1>
+            <p className="text-xs text-muted-foreground">{formatIST(nowIST(), "EEE, dd MMM yyyy • p zzz")}</p>
+          </div>
+          <SyncBadge state="queued" />
+        </div>
+        <div className="max-w-screen-md mx-auto px-4 pb-3">
+          <HeaderPickers />
+        </div>
+      </header>
+
+      <main className="max-w-screen-md mx-auto px-4 pb-24 pt-4 space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Today at a glance</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            Feed due vs given, materials used, today’s expenses, low-stock, pending approvals
+          </CardContent>
+        </Card>
+
+        <QuickActionsGrid />
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent activity</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            Last 10 events will appear here.
+          </CardContent>
+        </Card>
+      </main>
+
+      <TabBar />
     </div>
   );
 };

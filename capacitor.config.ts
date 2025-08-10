@@ -1,0 +1,15 @@
+import { CapacitorConfig } from '@capacitor/cli';
+
+const config: CapacitorConfig = {
+  appId: 'app.lovable.08a558a8aca8494b8002d1fc467ee319',
+  appName: 'AquaLedger',
+  webDir: 'dist',
+  bundledWebRuntime: false,
+  server: {
+    // Hot reload from sandbox preview when running on device/emulator during development
+    url: 'https://08a558a8-aca8-494b-8002-d1fc467ee319.lovableproject.com?forceHideBadge=true',
+    cleartext: true,
+  },
+};
+
+export default config;

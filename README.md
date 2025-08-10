@@ -1,73 +1,60 @@
-# Welcome to your Lovable project
+# AquaLedger — Shrimp & Fish Farm Ledger (MVP)
 
-## Project info
+AquaLedger replaces manual books for shrimp and fish farmers with an offline‑first, encrypted mobile app. Built with React + Vite + Tailwind + Capacitor.
 
-**URL**: https://lovable.dev/projects/08a558a8-aca8-494b-8002-d1fc467ee319
+## Key features (MVP)
+- Offline‑first with local database and background sync when online
+- Tabs: Dashboard, Feeding, Materials, Expenses, Settings
+- Global pickers (Location, Tank) across tabs
+- Role-based access: Owner, Manager, Partner
+- Approval workflow for Manager edits (scaffolded)
+- WAC (Weighted Average Cost) stock accounting (scaffolded)
+- IST crop day counter and timestamps in UTC
 
-## How can I edit this code?
+## Roles & permissions
+- Owner: full access; can view pricing; can create username+password/roles
+- Manager: can record data; cannot view accounts/pricing; edits require Owner approval
+- Partner: read‑only
 
-There are several ways of editing your application.
+## Subscriptions & limits (enforced on create)
+- Free: max 1 Location; max 2 Tanks total; Owner only. Price ₹199/yr; Offer ₹0
+- Pro: max 2 Locations; max 4 Tanks each; Owner only. Price ₹999/yr; Offer ₹599
+- Enterprise: unlimited Locations/Tanks; roles Owner/Manager/Partner; Manager edits require Owner approval; Manager/Partner cannot view pricing. Price ₹5999/yr; Offer ₹2999
 
-**Use Lovable**
+## WAC logic (per Location)
+- Purchases: amount = qty × unitPrice
+- WAC = totalAmount / totalQty
+- Usage (feed/materials) deducts qty and cost at current WAC
+- Prevent negative stock; prompt to add stock when insufficient
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/08a558a8-aca8-494b-8002-d1fc467ee319) and start prompting.
+## Approval workflow (Manager edits)
+1. Manager edit creates `Approval` with `diffJson`, `status=pending`
+2. Owner approves/rejects with comment
+3. On approve, apply diff, write `AuditLog`, enqueue sync
 
-Changes made via Lovable will be committed automatically to this repo.
+## IST crop day counter
+- Day = floor((now_IST – start_IST)/1d) + 1; minimum 1
+- Timestamps stored in UTC; displayed in IST
 
-**Use your preferred IDE**
+## Offline/sync
+- Queue all write operations locally
+- Sync in batches with exponential backoff
+- Conflict resolution: field‑level last‑writer‑wins via `updatedAt` + `deviceId`
+- Sync status chip: Synced / Queued / Error
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## Security
+- Local DB and files encrypted on native (Capacitor SQLite + OS keychain/keystore)
+- HTTPS only for network traffic
+- Sessions persisted securely (native keychain/keystore)
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## Development
+- Dev Test Login is enabled in development builds via Settings
+- No sample data is shipped; lists are empty until you add data
 
-Follow these steps:
+## Mobile (Android/iOS)
+1. Export to your GitHub, clone, and `npm install`
+2. Initialize Capacitor if needed and add platforms: `npx cap add ios` / `android`
+3. Build: `npm run build` then `npx cap sync`
+4. Run: `npx cap run ios` / `android`
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/08a558a8-aca8-494b-8002-d1fc467ee319) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+Note: This MVP scaffolds offline DB, sync queue, and RBAC UI. Connect Supabase in Lovable to enable backend authentication and cloud sync.
