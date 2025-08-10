@@ -47,7 +47,7 @@ interface FeedingEntry {
 }
 
 // Expenses model
-type ExpenseCategory = "manpower" | "salaries" | "electricity" | "diesel" | "generator" | "medicine" | "other";
+type ExpenseCategory = "lease" | "seed" | "manpower" | "salaries" | "electricity" | "diesel" | "generator" | "medicine" | "other";
 interface ExpenseEntry {
   id: string;
   category: ExpenseCategory;
@@ -118,6 +118,8 @@ const listFeedingAcrossCrop = (locationId: string, tankId: string, startISO?: st
 };
 
 const categoryLabel: Record<ExpenseCategory, string> = {
+  lease: "Lease",
+  seed: "Seed",
   manpower: "Man power",
   salaries: "Salaries",
   electricity: "Electricity",
@@ -178,7 +180,7 @@ const Expenses = () => {
   const detail = useMemo(() => (tank ? loadTankDetail(tank.id) : null), [tank?.id, rev]);
 
   // Derived expenses
-  const seedCost = detail?.price ?? 0;
+  const seedCostFromDetail = detail?.price ?? 0;
   const feedEntries = useMemo(() =>
     location?.id && tank?.id ? listFeedingAcrossCrop(location.id, tank.id, detail?.seedDate, detail?.cropEnd) : [],
   [location?.id, tank?.id, detail?.seedDate, detail?.cropEnd, rev]);
@@ -191,16 +193,36 @@ const Expenses = () => {
 
   const feedCost = useMemo(() => feedEntries.reduce((sum, e) => sum + (e.quantity * (priceByStockName.get(e.stockName) ?? 0)), 0), [feedEntries, priceByStockName]);
 
-  const totalsByCategory = useMemo(() => {
+  const entriesInRange = useMemo(() => {
+    if (!detail?.seedDate) return entries;
+    const start = new Date(detail.seedDate);
+    const end = detail?.cropEnd ? new Date(detail.cropEnd) : new Date();
+    return entries.filter((e) => {
+      const d = new Date(e.date);
+      return d >= start && d <= end;
+    });
+  }, [entries, detail?.seedDate, detail?.cropEnd]);
+
+  const totalsByName: Record<string, number> = useMemo(() => {
     const agg: Record<string, number> = {};
-    for (const e of entries) {
+    for (const e of entriesInRange) {
       agg[e.name] = (agg[e.name] || 0) + e.amount;
     }
     return agg;
-  }, [entries]);
+  }, [entriesInRange]);
 
-  const otherTotal = useMemo(() => entries.reduce((sum, e) => sum + e.amount, 0), [entries]);
-  const grandTotal = useMemo(() => seedCost + feedCost + otherTotal, [seedCost, feedCost, otherTotal]);
+  const totalsByCat: Partial<Record<ExpenseCategory, number>> = useMemo(() => {
+    const agg: Partial<Record<ExpenseCategory, number>> = {};
+    for (const e of entriesInRange) {
+      agg[e.category] = (agg[e.category] || 0) + e.amount;
+    }
+    return agg;
+  }, [entriesInRange]);
+
+  const otherTotal = useMemo(() => entriesInRange.reduce((sum, e) => sum + e.amount, 0), [entriesInRange]);
+  const seedCost = (totalsByCat["seed"] ?? 0) || seedCostFromDetail;
+  const leaseTotal = totalsByCat["lease"] ?? 0;
+  const grandTotal = useMemo(() => seedCost + feedCost + otherTotal + leaseTotal, [seedCost, feedCost, otherTotal, leaseTotal]);
 
   const isManager = hasRole(["manager"]);
   const fmt = (n: number) => (isManager ? "—" : `₹ ${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`);
@@ -252,7 +274,7 @@ const Expenses = () => {
           <>
             <Card>
               <CardHeader>
-                <CardTitle>Add Other Expense</CardTitle>
+                <CardTitle>Add Expense</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -263,6 +285,8 @@ const Expenses = () => {
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
                       <SelectContent className="z-50 bg-popover">
+                        <SelectItem value="lease">Lease</SelectItem>
+                        <SelectItem value="seed">Seed</SelectItem>
                         <SelectItem value="manpower">Man power</SelectItem>
                         <SelectItem value="salaries">Salaries</SelectItem>
                         <SelectItem value="electricity">Electricity</SelectItem>
@@ -348,10 +372,11 @@ const Expenses = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between"><span>Lease / Seed price</span><span>{fmt(seedCost)}</span></div>
+                  <div className="flex items-center justify-between"><span>Lease</span><span>{fmt(leaseTotal)}</span></div>
+                  <div className="flex items-center justify-between"><span>Seed cost</span><span>{fmt(seedCost)}</span></div>
                   <div className="flex items-center justify-between"><span>Feed cost</span><span>{fmt(feedCost)}</span></div>
-                  {Object.keys(totalsByCategory).map((k) => (
-                    <div key={k} className="flex items-center justify-between"><span>{k}</span><span>{fmt(totalsByCategory[k])}</span></div>
+                  {Object.entries(totalsByName).filter(([k]) => k !== "Lease" && k !== "Seed").map(([k, v]) => (
+                    <div key={k} className="flex items-center justify-between"><span>{k}</span><span>{fmt(v)}</span></div>
                   ))}
                   <div className="border-t pt-2 flex items-center justify-between font-semibold text-foreground"><span>Grand Total</span><span>{fmt(grandTotal)}</span></div>
                 </div>
