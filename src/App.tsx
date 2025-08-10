@@ -16,6 +16,7 @@ import Tanks from "./pages/Tanks";
 import TankDetail from "./pages/TankDetail";
 import Stocks from "./pages/Stocks";
 import TankFeeding from "./pages/TankFeeding";
+import Reports from "./pages/Reports";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -37,6 +38,7 @@ const App = () => (
               <Route path="/locations/:locationId/tanks/:tankId" element={<TankDetail />} />
               <Route path="/locations/:locationId/tanks/:tankId/feeding" element={<TankFeeding />} />
               <Route path="/locations/:locationId/stocks" element={<Stocks />} />
+              <Route path="/reports" element={<Reports />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

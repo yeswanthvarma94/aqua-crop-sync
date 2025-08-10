@@ -36,6 +36,9 @@ const QuickActionsGrid = () => {
       case "materials":
         navigate("/materials");
         break;
+      case "reports":
+        navigate("/reports");
+        break;
       default:
         break;
     }
