@@ -11,6 +11,8 @@ import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import { AuthProvider } from "@/state/AuthContext";
 import { SelectionProvider } from "@/state/SelectionContext";
+import Locations from "./pages/Locations";
+import Tanks from "./pages/Tanks";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -27,6 +29,8 @@ const App = () => (
               <Route path="/materials" element={<Materials />} />
               <Route path="/expenses" element={<Expenses />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/locations" element={<Locations />} />
+              <Route path="/locations/:locationId/tanks" element={<Tanks />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

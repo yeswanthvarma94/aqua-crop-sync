@@ -1,6 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Building2, DatabaseZap, FileText, FlaskConical, Recycle, Scale, ShieldCheck, ShoppingCart, Users } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useSelection } from "@/state/SelectionContext";
 
 const items = [
   { key: "locations", label: "Locations", icon: Building2 },
@@ -15,6 +17,23 @@ const items = [
 ] as const;
 
 const QuickActionsGrid = () => {
+  const navigate = useNavigate();
+  const { location } = useSelection();
+
+  const handleNav = (key: string) => {
+    switch (key) {
+      case "locations":
+        navigate("/locations");
+        break;
+      case "tanks":
+        if (location?.id) navigate(`/locations/${location.id}/tanks`);
+        else navigate("/locations");
+        break;
+      default:
+        break;
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -23,7 +42,7 @@ const QuickActionsGrid = () => {
       <CardContent>
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
           {items.map(({ key, label, icon: Icon }) => (
-            <Button key={key} variant="secondary" className="h-20 flex flex-col items-center justify-center gap-2">
+            <Button key={key} variant="secondary" className="h-20 flex flex-col items-center justify-center gap-2" onClick={() => handleNav(key)}>
               <Icon size={18} />
               <span className="text-xs">{label}</span>
             </Button>
