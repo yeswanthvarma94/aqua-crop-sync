@@ -19,6 +19,14 @@ export const setActiveAccountId = (accountId: string) => {
   }
 };
 
+export const clearActiveAccountId = () => {
+  try {
+    localStorage.removeItem(ACTIVE_ACCOUNT_KEY);
+  } catch {
+    // no-op
+  }
+};
+
 /**
  * Ensures the current user has an account and is a member.
  * - If ACTIVE_ACCOUNT_KEY present and user is a member, returns it.
@@ -44,6 +52,9 @@ export const ensureDefaultAccount = async (userId: string): Promise<string> => {
       .eq("user_id", userId)
       .maybeSingle();
     if (m) return existing;
+
+    // Not owner or member of stored account; clear it before proceeding
+    clearActiveAccountId();
   }
 
   // Prefer any account owned by this user
@@ -115,3 +126,4 @@ export const getMembershipRole = async (
 
   return ((member as any)?.role as any) ?? null;
 };
+

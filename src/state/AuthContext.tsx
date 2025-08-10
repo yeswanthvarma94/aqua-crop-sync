@@ -3,6 +3,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from "
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/integrations/supabase/client";
 import { ensureDefaultAccount, getMembershipRole, getActiveAccountId, setActiveAccountId } from "@/lib/account";
+import { cleanupAuthState } from "@/lib/authCleanup";
 
 export type UserRole = "owner" | "manager" | "partner";
 export type UserStatus = "active" | "disabled";
@@ -162,7 +163,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async () => {
-    try { await supabase.auth.signOut({ scope: "global" } as any); } catch {}
+    // Clear local auth/app state first to avoid stale sessions
+    cleanupAuthState();
+    try { await supabase.auth.signOut({ scope: "global" } as any); } catch (e) { console.warn("supabase signOut failed:", e); }
     setUser(null);
     setAccountId(null);
   };
@@ -196,3 +199,4 @@ export const useAuth = (): AuthContextValue => {
   }
   return ctx;
 };
+
