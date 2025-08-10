@@ -59,6 +59,14 @@ export const ensureDefaultAccount = async (userId: string): Promise<string> => {
     .single();
   if (createErr || !created?.id) throw createErr || new Error("Unable to create default account");
   const accountId = (created as any)!.id as string;
+  // Ensure the owner also exists in account_members with explicit 'owner' role
+  try {
+    await supabase.from("account_members").insert([
+      { account_id: accountId, user_id: userId, role: "owner" as any },
+    ]);
+  } catch {
+    // no-op: owner permissions derive from accounts.owner_id regardless
+  }
   setActiveAccountId(accountId);
   return accountId;
 };
