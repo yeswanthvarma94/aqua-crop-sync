@@ -117,6 +117,42 @@ const listFeedingAcrossCrop = (locationId: string, tankId: string, startISO?: st
   return items;
 };
 
+// Materials logs
+interface MaterialLogEntry {
+  stockId: string;
+  stockName: string;
+  category: StockRecord["category"];
+  unit: StockRecord["unit"];
+  quantity: number;
+  time: string;
+  notes?: string;
+  createdAt: string;
+}
+
+const listMaterialsAcrossCrop = (locationId: string, startISO?: string, endISO?: string): MaterialLogEntry[] => {
+  const items: MaterialLogEntry[] = [];
+  const start = startISO ? new Date(startISO).getTime() : undefined;
+  const end = endISO ? new Date(endISO).getTime() : Date.now();
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)!;
+    const prefix = `materials:logs:${locationId}:`;
+    if (key && key.startsWith(prefix)) {
+      const dateStr = key.substring(prefix.length); // yyyy-MM-dd
+      const dateTime = new Date(`${dateStr}T00:00:00`).getTime();
+      if (start !== undefined && dateTime < start) continue;
+      if (end !== undefined && dateTime > end) continue;
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const arr = JSON.parse(raw) as MaterialLogEntry[];
+          items.push(...arr);
+        }
+      } catch {}
+    }
+  }
+  return items;
+};
+
 const categoryLabel: Record<ExpenseCategory, string> = {
   lease: "Lease",
   seed: "Seed",
