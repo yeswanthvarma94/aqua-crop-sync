@@ -45,7 +45,7 @@ export const ensureDefaultAccount = async (userId: string): Promise<string> => {
     .eq("user_id", userId)
     .limit(1);
   if (!memErr && memberships && memberships.length > 0) {
-    const accountId = memberships[0].account_id as string;
+    const accountId = (memberships[0] as any).account_id as string;
     setActiveAccountId(accountId);
     return accountId;
   }
@@ -58,7 +58,7 @@ export const ensureDefaultAccount = async (userId: string): Promise<string> => {
     .select("id")
     .single();
   if (createErr || !created?.id) throw createErr || new Error("Unable to create default account");
-  const accountId = created.id as string;
+  const accountId = (created as any)!.id as string;
   setActiveAccountId(accountId);
   return accountId;
 };
@@ -76,7 +76,7 @@ export const getMembershipRole = async (
     .select("owner_id")
     .eq("id", accountId)
     .maybeSingle();
-  if (acc?.owner_id === userId) return "owner";
+  if (acc && (acc as any).owner_id === userId) return "owner";
 
   const { data: member } = await supabase
     .from("account_members")
@@ -85,5 +85,5 @@ export const getMembershipRole = async (
     .eq("user_id", userId)
     .maybeSingle();
 
-  return (member?.role as any) ?? null;
+  return ((member as any)?.role as any) ?? null;
 };

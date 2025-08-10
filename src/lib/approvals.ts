@@ -40,7 +40,7 @@ export const loadPendingChanges = async (): Promise<PendingChange[]> => {
     console.error("loadPendingChanges:", error);
     return [];
   }
-  return (data || []).map((row: any) => ({
+  return ((data as any[]) || []).map((row: any) => ({
     id: row.id,
     type: row.type,
     description: "", // description not stored; optional
@@ -63,7 +63,7 @@ export const enqueueChange = async <T = any>(type: ChangeType, payload: T, descr
     return null;
   }
   const { data: userRes } = await supabase.auth.getUser();
-  const userId = userRes.user?.id ?? null;
+  const userId = (userRes as any).user?.id ?? null;
 
   const toInsert = {
     account_id: accountId,
@@ -81,17 +81,17 @@ export const enqueueChange = async <T = any>(type: ChangeType, payload: T, descr
     .select("id, created_at")
     .single();
 
-  if (error) {
+  if (error || !data) {
     console.error("enqueueChange:", error);
     return null;
   }
 
   return {
-    id: data.id,
+    id: (data as any).id,
     type,
     description,
     payload,
-    createdAt: data.created_at,
+    createdAt: (data as any).created_at,
     status: "pending",
     createdBy: userId,
   };
