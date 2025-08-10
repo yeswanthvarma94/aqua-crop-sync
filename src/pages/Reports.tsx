@@ -170,6 +170,14 @@ const Reports = () => {
     return data;
   }, [days, actualFeedPerDay, recommendedFeedPerDay, fr]);
 
+  const feedTable = useMemo(() => {
+    let cum = 0;
+    return fcrTrendData.map((r) => {
+      cum += r.actual || 0;
+      return { ...r, cum };
+    });
+  }, [fcrTrendData]);
+
   // costs in range
   const feedCost = useMemo(() => feedEntries.reduce((sum, e) => sum + (e.quantity * (priceByStockName.get(e.stockName) ?? 0)), 0), [feedEntries, priceByStockName]);
   const materialsMedicineCost = useMemo(() => materialEntries.filter(m => m.category === "medicine").reduce((s, m) => s + (m.quantity * (priceByStockId.get(m.stockId) ?? 0)), 0), [materialEntries, priceByStockId]);
@@ -267,6 +275,36 @@ const Reports = () => {
             </Card>
 
             <Card>
+              <CardHeader><CardTitle>Feed per Day (table)</CardTitle></CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Actual (kg)</TableHead>
+                      <TableHead>Recommended (kg)</TableHead>
+                      <TableHead>Cumulative Feed (kg)</TableHead>
+                      <TableHead>Biomass (kg)</TableHead>
+                      <TableHead>FCR</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {feedTable.map((r) => (
+                      <TableRow key={r.date}>
+                        <TableCell>{r.date}</TableCell>
+                        <TableCell>{(r.actual ?? 0).toFixed(2)}</TableCell>
+                        <TableCell>{(r.rec ?? 0).toFixed(2)}</TableCell>
+                        <TableCell>{(r.cum ?? 0).toFixed(2)}</TableCell>
+                        <TableCell>{(r.biomass ?? 0).toFixed(2)}</TableCell>
+                        <TableCell>{r.fcr ? r.fcr.toFixed(2) : "—"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            <Card>
               <CardHeader><CardTitle>Costs (selected period)</CardTitle></CardHeader>
               <CardContent>
                 <div className="space-y-2 text-sm">
@@ -280,7 +318,37 @@ const Reports = () => {
             </Card>
 
             <Card>
-              <CardHeader><CardTitle>Recent expenses</CardTitle></CardHeader>
+              <CardHeader><CardTitle>Materials used (selected period)</CardTitle></CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Material</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Qty</TableHead>
+                      <TableHead>Unit</TableHead>
+                      <TableHead>Cost</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {materialEntries.map((m, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell>{m.createdAt.slice(0,10)}</TableCell>
+                        <TableCell>{m.stockName}</TableCell>
+                        <TableCell className="capitalize">{m.category}</TableCell>
+                        <TableCell>{m.quantity}</TableCell>
+                        <TableCell className="uppercase">{m.unit}</TableCell>
+                        <TableCell>{fmt(m.quantity * (priceByStockId.get(m.stockId) ?? 0))}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle>Expenses (selected period)</CardTitle></CardHeader>
               <CardContent>
                 <Table>
                   <TableHeader>
@@ -291,7 +359,7 @@ const Reports = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {expenseEntries.slice(0, 10).map((e) => (
+                    {expenseEntries.map((e) => (
                       <TableRow key={e.id}>
                         <TableCell>{e.date}</TableCell>
                         <TableCell>{e.name}</TableCell>
