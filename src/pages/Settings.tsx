@@ -118,7 +118,20 @@ const Settings = () => {
     }
   }, [plan]);
 
-  const pendingCount = loadPendingChanges().length;
+  // Fetch pending approvals count asynchronously
+  const [pendingCount, setPendingCount] = useState(0);
+  useEffect(() => {
+    let active = true;
+    loadPendingChanges()
+      .then((list) => {
+        if (active) setPendingCount(list.length);
+      })
+      .catch((err) => {
+        console.error("Failed to load pending approvals:", err);
+      });
+    return () => { active = false; };
+  }, []);
+
   const storageBytes = bytesForLocalStorage();
   const storageKB = Math.round(storageBytes / 1024);
 

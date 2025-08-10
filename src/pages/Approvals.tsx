@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -120,7 +121,7 @@ const Approvals = () => {
           // Try find existing by name/category/unit
           const { data: existing } = await supabase
             .from("stocks")
-            .select("id, quantity, price_per_unit, min_stock, total_amount")
+            .select("id, quantity, price_per_unit, min_stock, total_amount, notes") // include notes so it's accessible below
             .eq("location_id", locationId)
             .eq("name", name)
             .eq("category", category)
@@ -129,13 +130,13 @@ const Approvals = () => {
           const amount = Number(pricePerUnit || 0) * Number(quantity || 0);
           if (existing?.id) {
             await supabase.from("stocks").update({
-              quantity: Math.max(0, Number(existing.quantity || 0) + Number(quantity || 0)),
-              total_amount: Math.max(0, Number(existing.total_amount || 0)) + amount,
-              price_per_unit: Number(pricePerUnit || existing.price_per_unit || 0),
-              min_stock: Math.max(0, Number(minStock ?? existing.min_stock ?? 0)),
+              quantity: Math.max(0, Number((existing as any).quantity || 0) + Number(quantity || 0)),
+              total_amount: Math.max(0, Number((existing as any).total_amount || 0)) + amount,
+              price_per_unit: Number(pricePerUnit || (existing as any).price_per_unit || 0),
+              min_stock: Math.max(0, Number(minStock ?? (existing as any).min_stock ?? 0)),
               expiry_date: expiryISO || null,
-              notes: notes || existing.notes || null,
-            }).eq("id", existing.id);
+              notes: notes || (existing as any).notes || null,
+            }).eq("id", (existing as any).id);
           } else {
             await supabase.from("stocks").insert([{
               account_id: acc || accountId,
