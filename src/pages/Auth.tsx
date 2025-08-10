@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/state/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Mail, Phone, Eye, EyeOff, Loader2, LogIn, ChevronRight } from "lucide-react";
+import { useNavigate, Link } from "react-router-dom";
 const useSEO = (title: string, description: string) => {
   useEffect(() => {
     document.title = title;
@@ -28,6 +29,7 @@ const Auth = () => {
   useSEO("Aqua Management | Sign in", "Secure login for Aqua Management aquaculture system.");
   const { toast } = useToast();
   const { signInDev, isDevLoginEnabled, signInLocal } = useAuth();
+  const navigate = useNavigate();
 
   // Email/Mobile
   const [mode, setMode] = useState<"email" | "mobile">("email");
@@ -190,7 +192,7 @@ const Auth = () => {
               <button
                 type="button"
                 className="text-sm font-medium text-primary hover:underline inline-flex items-center gap-1"
-                onClick={signUp}
+                onClick={() => navigate("/signup")}
               >
                 Create a new account <ChevronRight className="h-4 w-4" />
               </button>

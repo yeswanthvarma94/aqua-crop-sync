@@ -19,6 +19,7 @@ import TankFeeding from "./pages/TankFeeding";
 import Reports from "./pages/Reports";
 import Approvals from "./pages/Approvals";
 import Auth from "./pages/Auth";
+import SignUp from "./pages/SignUp";
 const queryClient = new QueryClient();
 
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
@@ -43,6 +44,7 @@ const App = () => (
           <SelectionProvider>
             <Routes>
               <Route path="/auth" element={<PublicOnlyRoute><Auth /></PublicOnlyRoute>} />
+              <Route path="/signup" element={<PublicOnlyRoute><SignUp /></PublicOnlyRoute>} />
               <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
               <Route path="/feeding" element={<ProtectedRoute><Feeding /></ProtectedRoute>} />
               <Route path="/materials" element={<ProtectedRoute><Materials /></ProtectedRoute>} />
