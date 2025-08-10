@@ -207,6 +207,8 @@ export type Database = {
       pending_changes: {
         Row: {
           account_id: string
+          approved_at: string | null
+          approved_by: string | null
           created_at: string
           created_by: string
           description: string | null
@@ -218,6 +220,8 @@ export type Database = {
         }
         Insert: {
           account_id: string
+          approved_at?: string | null
+          approved_by?: string | null
           created_at?: string
           created_by: string
           description?: string | null
@@ -229,6 +233,8 @@ export type Database = {
         }
         Update: {
           account_id?: string
+          approved_at?: string | null
+          approved_by?: string | null
           created_at?: string
           created_by?: string
           description?: string | null
