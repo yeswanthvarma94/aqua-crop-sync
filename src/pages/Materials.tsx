@@ -89,6 +89,7 @@ const Materials = () => {
     const { data, error } = await supabase
       .from("stocks")
       .select("id, name, category, unit, quantity, price_per_unit, min_stock, expiry_date, notes, created_at, created_at")
+      .eq("account_id", accountId)
       .eq("location_id", locationId)
       .order("created_at", { ascending: false });
     if (!error) {
@@ -116,6 +117,7 @@ const Materials = () => {
     const { data, error } = await supabase
       .from("material_logs")
       .select("id, stock_id, quantity, time, notes, tank_id, location_id")
+      .eq("account_id", accountId)
       .eq("location_id", locationId)
       .eq("tank_id", tankId)
       .gte("time", start.toISOString())
