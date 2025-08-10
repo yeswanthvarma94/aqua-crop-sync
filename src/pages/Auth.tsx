@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/state/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-
+import { Mail, Phone, Eye, EyeOff, Loader2, LogIn, ChevronRight } from "lucide-react";
 const useSEO = (title: string, description: string) => {
   useEffect(() => {
     document.title = title;
@@ -24,16 +25,18 @@ const useSEO = (title: string, description: string) => {
 };
 
 const Auth = () => {
-  useSEO("Sign in | AquaLedger", "Login with Google, Email/Mobile, or Username, and reset password.");
+  useSEO("Aqua Management | Sign in", "Secure login for Aqua Management aquaculture system.");
   const { toast } = useToast();
   const { signInDev, isDevLoginEnabled, signInLocal } = useAuth();
 
   // Email/Mobile
+  const [mode, setMode] = useState<"email" | "mobile">("email");
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Username
+  // Username (kept for logic, hidden in UI)
   const [uname, setUname] = useState("");
   const [upass, setUpass] = useState("");
 
@@ -54,12 +57,14 @@ const Auth = () => {
     setLoading(true);
     try {
       const value = identifier.trim();
-      if (!value || !password) throw new Error("Enter email/mobile and password");
-      const isEmail = /@/.test(value);
-      const { error } = await supabase.auth.signInWithPassword(
-        isEmail ? { email: value, password } : ({ phone: value, password } as any)
-      );
-      if (error) throw error;
+      if (!value || !password) throw new Error("Enter credentials");
+      if (mode === "email") {
+        const { error } = await supabase.auth.signInWithPassword({ email: value, password });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ phone: value as any, password } as any);
+        if (error) throw error;
+      }
       toast({ title: "Signed in", description: "Welcome back!" });
       setIdentifier(""); setPassword("");
     } catch (e: any) {
@@ -93,76 +98,129 @@ const Auth = () => {
     }
   };
 
+  const signUp = async () => {
+    if (mode !== "email") { toast({ title: "Use email to create account", description: "Sign up currently supports email only." }); return; }
+    const email = identifier.trim();
+    if (!email || !password) { toast({ title: "Missing fields", description: "Enter email and password" }); return; }
+    const redirectUrl = `${window.location.origin}/`;
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: redirectUrl }
+    });
+    if (error) {
+      toast({ title: "Sign up failed", description: error.message });
+    } else {
+      toast({ title: "Check your email", description: "Confirm your address to finish signing up." });
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-10 bg-background/90 backdrop-blur border-b">
-        <div className="max-w-screen-sm mx-auto px-4 py-3">
-          <h1 className="text-base font-semibold">Sign in</h1>
+    <div className="min-h-screen bg-background flex items-center justify-center px-4">
+      <main className="w-full max-w-md space-y-6">
+        <div className="text-center space-y-1">
+          <h1 className="text-4xl font-extrabold tracking-tight text-primary">Aqua Management</h1>
+          <p className="text-muted-foreground">Professional aquaculture management system</p>
         </div>
-      </header>
-
-      <main className="max-w-screen-sm mx-auto px-4 py-6 space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Continue with Google</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Button className="w-full" onClick={googleLogin}>Sign in with Google</Button>
-          </CardContent>
-        </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Email or Mobile + Password</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid gap-2">
-              <Label>Email or Mobile</Label>
-              <Input value={identifier} onChange={(e) => setIdentifier(e.target.value)} placeholder="you@example.com or 9876543210" />
-            </div>
+          <CardContent className="pt-6 space-y-4">
+            <Tabs value={mode} onValueChange={(v) => setMode(v as "email" | "mobile")}>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="email" className="flex items-center gap-2">
+                  <Mail className="h-4 w-4" /> Email
+                </TabsTrigger>
+                <TabsTrigger value="mobile" className="flex items-center gap-2">
+                  <Phone className="h-4 w-4" /> Mobile
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="email" className="space-y-3">
+                <div className="grid gap-2">
+                  <Label>Email address</Label>
+                  <Input
+                    type="email"
+                    placeholder="you@example.com"
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
+                  />
+                </div>
+              </TabsContent>
+
+              <TabsContent value="mobile" className="space-y-3">
+                <div className="grid gap-2">
+                  <Label>Mobile</Label>
+                  <Input
+                    type="tel"
+                    inputMode="tel"
+                    placeholder="e.g. +15551234567"
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
+                  />
+                </div>
+              </TabsContent>
+            </Tabs>
+
             <div className="grid gap-2">
               <Label>Password</Label>
-              <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
+              <div className="relative">
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="absolute inset-y-0 right-2 flex items-center px-2 text-muted-foreground"
+                  onClick={() => setShowPassword((s) => !s)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Button onClick={emailOrPhoneLogin} disabled={loading}>Sign in</Button>
-              <Button variant="secondary" onClick={forgotPassword}>Forgot password</Button>
-            </div>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Username + Password</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid gap-2">
-              <Label>Username</Label>
-              <Input value={uname} onChange={(e) => setUname(e.target.value)} placeholder="username" />
+            <Button className="w-full" onClick={emailOrPhoneLogin} disabled={loading}>
+              {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <LogIn className="h-4 w-4 mr-2" />}
+              {mode === "email" ? "Sign in with Email" : "Sign in with Mobile"}
+            </Button>
+
+            <div className="text-center">
+              <button
+                type="button"
+                className="text-sm font-medium text-primary hover:underline inline-flex items-center gap-1"
+                onClick={signUp}
+              >
+                Create a new account <ChevronRight className="h-4 w-4" />
+              </button>
             </div>
-            <div className="grid gap-2">
-              <Label>Password</Label>
-              <Input type="password" value={upass} onChange={(e) => setUpass(e.target.value)} placeholder="••••••••" />
+
+            <div className="flex items-center gap-4">
+              <Separator className="flex-1" />
+              <span className="text-xs text-muted-foreground">Or continue with</span>
+              <Separator className="flex-1" />
             </div>
-            <Button onClick={usernameLogin}>Sign in</Button>
+
+            <Button variant="outline" className="w-full" onClick={googleLogin}>
+              Continue with Google
+            </Button>
           </CardContent>
         </Card>
 
         {isDevLoginEnabled && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Dev Test Login</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-wrap gap-2">
-              <Button onClick={() => signInDev("owner")}>Owner</Button>
-              <Button variant="secondary" onClick={() => signInDev("manager")}>Manager</Button>
-              <Button variant="secondary" onClick={() => signInDev("partner")}>Partner</Button>
-            </CardContent>
-          </Card>
+          <div className="text-center">
+            <div className="inline-flex gap-2">
+              <Button size="sm" onClick={() => signInDev("owner")}>Owner</Button>
+              <Button size="sm" variant="secondary" onClick={() => signInDev("manager")}>Manager</Button>
+              <Button size="sm" variant="secondary" onClick={() => signInDev("partner")}>Partner</Button>
+            </div>
+          </div>
         )}
 
-        <Separator />
-        <p className="text-xs text-muted-foreground">By signing in, you agree to the Terms and Privacy Policy.</p>
+        <p className="text-xs text-muted-foreground text-center">
+          By signing in, you agree to the Terms and Privacy Policy.
+        </p>
       </main>
     </div>
   );
