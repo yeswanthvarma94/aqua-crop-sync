@@ -48,7 +48,7 @@ const Feeding = () => {
       toast({ title: "Inactive tank", description: "Start crop to enable feeding." });
       return;
     }
-    navigate(`/locations/${t.locationId}/tanks/${t.id}`);
+    navigate(`/locations/${t.locationId}/tanks/${t.id}/feeding`);
   };
 
   return (
