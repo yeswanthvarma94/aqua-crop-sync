@@ -77,28 +77,43 @@ export type Database = {
         Row: {
           account_id: string
           amount: number
+          category: string | null
           created_at: string
           description: string
           id: string
           incurred_at: string
+          location_id: string | null
+          name: string | null
+          notes: string | null
+          tank_id: string | null
           updated_at: string
         }
         Insert: {
           account_id: string
           amount: number
+          category?: string | null
           created_at?: string
           description: string
           id?: string
           incurred_at?: string
+          location_id?: string | null
+          name?: string | null
+          notes?: string | null
+          tank_id?: string | null
           updated_at?: string
         }
         Update: {
           account_id?: string
           amount?: number
+          category?: string | null
           created_at?: string
           description?: string
           id?: string
           incurred_at?: string
+          location_id?: string | null
+          name?: string | null
+          notes?: string | null
+          tank_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -151,6 +166,7 @@ export type Database = {
           account_id: string
           created_at: string
           id: string
+          location_id: string | null
           logged_at: string
           note: string | null
           quantity: number
@@ -162,6 +178,7 @@ export type Database = {
           account_id: string
           created_at?: string
           id?: string
+          location_id?: string | null
           logged_at?: string
           note?: string | null
           quantity: number
@@ -173,6 +190,7 @@ export type Database = {
           account_id?: string
           created_at?: string
           id?: string
+          location_id?: string | null
           logged_at?: string
           note?: string | null
           quantity?: number
@@ -257,28 +275,49 @@ export type Database = {
       stocks: {
         Row: {
           account_id: string
+          category: string | null
           created_at: string
+          expiry_date: string | null
           id: string
+          location_id: string | null
+          min_stock: number | null
           name: string
+          notes: string | null
+          price_per_unit: number | null
           quantity: number
+          total_amount: number | null
           unit: string | null
           updated_at: string
         }
         Insert: {
           account_id: string
+          category?: string | null
           created_at?: string
+          expiry_date?: string | null
           id?: string
+          location_id?: string | null
+          min_stock?: number | null
           name: string
+          notes?: string | null
+          price_per_unit?: number | null
           quantity?: number
+          total_amount?: number | null
           unit?: string | null
           updated_at?: string
         }
         Update: {
           account_id?: string
+          category?: string | null
           created_at?: string
+          expiry_date?: string | null
           id?: string
+          location_id?: string | null
+          min_stock?: number | null
           name?: string
+          notes?: string | null
+          price_per_unit?: number | null
           quantity?: number
+          total_amount?: number | null
           unit?: string | null
           updated_at?: string
         }
