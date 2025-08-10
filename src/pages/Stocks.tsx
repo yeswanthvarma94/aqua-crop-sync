@@ -190,14 +190,16 @@ const Stocks = () => {
             <h1 className="text-lg font-semibold">Stocks</h1>
             <p className="text-xs text-muted-foreground">Per-location inventory with alerts</p>
           </div>
-          <Dialog open={open} onOpenChange={handleOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm"><Plus className="mr-2 h-4 w-4" />Add Stock</Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[520px]">
-              <DialogHeader>
-                <DialogTitle>Add Stock</DialogTitle>
-              </DialogHeader>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" size="sm" onClick={() => navigate("/")}>Dashboard</Button>
+            <Dialog open={open} onOpenChange={handleOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm"><Plus className="mr-2 h-4 w-4" />Add Stock</Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[520px]">
+                <DialogHeader>
+                  <DialogTitle>Add Stock</DialogTitle>
+                </DialogHeader>
 
               <div className="grid grid-cols-1 gap-4">
                 <div className="grid gap-2">
@@ -300,6 +302,7 @@ const Stocks = () => {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+        </div>
         </div>
       </header>
 

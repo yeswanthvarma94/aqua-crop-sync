@@ -194,6 +194,7 @@ const TankDetailPage = () => {
           <h1 className="text-xl font-semibold">Tank Detail{ name ? ` — ${name}` : "" }</h1>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="secondary" size="sm" onClick={() => navigate("/")}>Dashboard</Button>
           {hasActiveCrop && (
             <span className="text-sm text-muted-foreground">Day {dayCounter}</span>
           )}
