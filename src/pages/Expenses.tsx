@@ -129,13 +129,13 @@ interface MaterialLogEntry {
   createdAt: string;
 }
 
-const listMaterialsAcrossCrop = (locationId: string, startISO?: string, endISO?: string): MaterialLogEntry[] => {
+const listMaterialsAcrossCrop = (locationId: string, tankId: string, startISO?: string, endISO?: string): MaterialLogEntry[] => {
   const items: MaterialLogEntry[] = [];
   const start = startISO ? new Date(startISO).getTime() : undefined;
   const end = endISO ? new Date(endISO).getTime() : Date.now();
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i)!;
-    const prefix = `materials:logs:${locationId}:`;
+    const prefix = `materials:logs:${locationId}:${tankId}:`;
     if (key && key.startsWith(prefix)) {
       const dateStr = key.substring(prefix.length); // yyyy-MM-dd
       const dateTime = new Date(`${dateStr}T00:00:00`).getTime();
@@ -229,6 +229,25 @@ const Expenses = () => {
 
   const feedCost = useMemo(() => feedEntries.reduce((sum, e) => sum + (e.quantity * (priceByStockName.get(e.stockName) ?? 0)), 0), [feedEntries, priceByStockName]);
 
+  // Materials (non-feed) used across crop for this tank
+  const materialsEntries = useMemo(() => (
+    location?.id && tank?.id ? listMaterialsAcrossCrop(location.id, tank.id, detail?.seedDate, detail?.cropEnd) : []
+  ), [location?.id, tank?.id, detail?.seedDate, detail?.cropEnd, rev]);
+
+  const priceByStockId = useMemo(() => {
+    const map = new Map<string, number>();
+    stocks.filter(s => s.category !== "feed").forEach(s => map.set(s.id, s.pricePerUnit || 0));
+    return map;
+  }, [stocks]);
+
+  const materialsMedicineCost = useMemo(() => materialsEntries
+    .filter(e => e.category === "medicine")
+    .reduce((sum, e) => sum + (e.quantity * (priceByStockId.get(e.stockId) ?? 0)), 0), [materialsEntries, priceByStockId]);
+
+  const materialsOtherCost = useMemo(() => materialsEntries
+    .filter(e => e.category !== "medicine")
+    .reduce((sum, e) => sum + (e.quantity * (priceByStockId.get(e.stockId) ?? 0)), 0), [materialsEntries, priceByStockId]);
+
   const entriesInRange = useMemo(() => {
     if (!detail?.seedDate) return entries;
     const start = new Date(detail.seedDate);
@@ -258,7 +277,11 @@ const Expenses = () => {
   const otherTotal = useMemo(() => entriesInRange.reduce((sum, e) => sum + e.amount, 0), [entriesInRange]);
   const seedCost = (totalsByCat["seed"] ?? 0) || seedCostFromDetail;
   const leaseTotal = totalsByCat["lease"] ?? 0;
-  const grandTotal = useMemo(() => seedCost + feedCost + otherTotal + leaseTotal, [seedCost, feedCost, otherTotal, leaseTotal]);
+
+  const grandTotal = useMemo(
+    () => seedCost + leaseTotal + feedCost + otherTotal + materialsMedicineCost + materialsOtherCost,
+    [seedCost, leaseTotal, feedCost, otherTotal, materialsMedicineCost, materialsOtherCost]
+  );
 
   const isManager = hasRole(["manager"]);
   const fmt = (n: number) => (isManager ? "—" : `₹ ${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`);
@@ -410,6 +433,8 @@ const Expenses = () => {
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center justify-between"><span>Lease</span><span>{fmt(leaseTotal)}</span></div>
                   <div className="flex items-center justify-between"><span>Seed cost</span><span>{fmt(seedCost)}</span></div>
+                  <div className="flex items-center justify-between"><span>Medicines (materials)</span><span>{fmt(materialsMedicineCost)}</span></div>
+                  <div className="flex items-center justify-between"><span>Other materials</span><span>{fmt(materialsOtherCost)}</span></div>
                   <div className="flex items-center justify-between"><span>Feed cost</span><span>{fmt(feedCost)}</span></div>
                   {Object.entries(totalsByName).filter(([k]) => k !== "Lease" && k !== "Seed").map(([k, v]) => (
                     <div key={k} className="flex items-center justify-between"><span>{k}</span><span>{fmt(v)}</span></div>

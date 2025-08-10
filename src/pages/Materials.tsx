@@ -31,6 +31,7 @@ interface StockRecord {
 }
 
 interface MaterialLogEntry {
+  tankId: string;
   stockId: string;
   stockName: string;
   category: StockRecord["category"];
@@ -54,17 +55,17 @@ const saveStocks = (locationId: string, items: StockRecord[]) => {
   localStorage.setItem(stockKey(locationId), JSON.stringify(items));
 };
 
-const logsKey = (locationId: string, dateKey: string) => `materials:logs:${locationId}:${dateKey}`;
-const loadLogs = (locationId: string, dateKey: string): MaterialLogEntry[] => {
+const logsKey = (locationId: string, tankId: string, dateKey: string) => `materials:logs:${locationId}:${tankId}:${dateKey}`;
+const loadLogs = (locationId: string, tankId: string, dateKey: string): MaterialLogEntry[] => {
   try {
-    const raw = localStorage.getItem(logsKey(locationId, dateKey));
+    const raw = localStorage.getItem(logsKey(locationId, tankId, dateKey));
     return raw ? (JSON.parse(raw) as MaterialLogEntry[]) : [];
   } catch {
     return [];
   }
 };
-const saveLogs = (locationId: string, dateKey: string, list: MaterialLogEntry[]) => {
-  localStorage.setItem(logsKey(locationId, dateKey), JSON.stringify(list));
+const saveLogs = (locationId: string, tankId: string, dateKey: string, list: MaterialLogEntry[]) => {
+  localStorage.setItem(logsKey(locationId, tankId, dateKey), JSON.stringify(list));
 };
 
 const useSEO = (title: string, description: string) => {
@@ -84,7 +85,7 @@ const useSEO = (title: string, description: string) => {
 
 const Materials = () => {
   const navigate = useNavigate();
-  const { location } = useSelection();
+  const { location, tank } = useSelection();
   const { toast } = useToast();
   const todayKey = format(new Date(), "yyyy-MM-dd");
 
@@ -110,14 +111,14 @@ const Materials = () => {
   }, [location?.id, rev]);
 
   useEffect(() => {
-    if (location?.id) setEntries(loadLogs(location.id, todayKey));
-  }, [location?.id, todayKey, rev]);
+    if (location?.id && tank?.id) setEntries(loadLogs(location.id, tank.id, todayKey));
+  }, [location?.id, tank?.id, todayKey, rev]);
 
   const lowStocks = useMemo(() => nonFeedStocks.filter(s => s.minStock > 0 && s.quantity < s.minStock), [nonFeedStocks]);
   const remaining = selectedStock?.quantity ?? 0;
 
   const saveUsage = () => {
-    if (!location?.id) return;
+    if (!location?.id || !tank?.id) return;
     if (!selectedStock) {
       toast({ title: "Select material", description: "Choose a material stock." });
       return;
@@ -131,8 +132,9 @@ const Materials = () => {
       return;
     }
 
-    const logs = loadLogs(location.id, todayKey);
+    const logs = loadLogs(location.id, tank.id, todayKey);
     const entry: MaterialLogEntry = {
+      tankId: tank.id,
       stockId: selectedStock.id,
       stockName: selectedStock.name,
       category: selectedStock.category,
@@ -143,7 +145,7 @@ const Materials = () => {
       createdAt: new Date().toISOString(),
     };
     logs.push(entry);
-    saveLogs(location.id, todayKey, logs);
+    saveLogs(location.id, tank.id, todayKey, logs);
 
     // Deduct stock
     const sList = loadStocks(location.id);
@@ -238,7 +240,7 @@ const Materials = () => {
                 </div>
 
                 <div className="mt-4">
-                  <Button onClick={saveUsage} disabled={!selectedStock || quantity <= 0 || quantity > remaining}>Save</Button>
+                  <Button onClick={saveUsage} disabled={!tank?.id || !selectedStock || quantity <= 0 || quantity > remaining}>Save</Button>
                 </div>
               </CardContent>
             </Card>
