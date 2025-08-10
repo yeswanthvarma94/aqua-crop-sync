@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/integrations/supabase/client";
@@ -176,8 +177,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
-export const useAuth = () => {
+// Make useAuth resilient: return safe defaults if the provider isn't mounted yet
+export const useAuth = (): AuthContextValue => {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+  if (!ctx) {
+    if (import.meta.env.DEV) {
+      console.warn("AuthProvider is not mounted; returning safe defaults from useAuth.");
+    }
+    return {
+      user: null,
+      accountId: null,
+      signInDev: async () => {},
+      signInLocal: async () => ({ ok: false, message: "AuthProvider not mounted" }),
+      signOut: async () => {},
+      hasRole: () => false,
+      isDevLoginEnabled: import.meta.env.MODE === "development",
+    };
+  }
   return ctx;
 };
