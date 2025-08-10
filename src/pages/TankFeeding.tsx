@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cropDayFromStartIST } from "@/lib/time";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { enqueueChange } from "@/lib/approvals";
+
 
 interface Tank { id: string; locationId: string; name: string; type: "shrimp" | "fish" }
 interface TankDetail { seedDate?: string; cropEnd?: string; name: string; type: "shrimp" | "fish" }
@@ -181,20 +181,25 @@ const TankFeeding = () => {
       createdAt: new Date().toISOString(),
     };
 
-    enqueueChange("feeding/log", {
-      locationId,
-      tankId,
-      dateKey: todayKey,
-      entry,
-      stockId: selectedStock.id,
-      quantity,
-    }, `Feeding S${entry.schedule}: ${entry.quantity} ${entry.unit} — ${entry.stockName}`);
+    // Save locally for today's feedings and deduct local stock
+    const list = loadFeeding(locationId, tankId, todayKey);
+    list.push(entry);
+    saveFeeding(locationId, tankId, todayKey, list);
+
+    if (selectedStock) {
+      const items = loadStocks(locationId);
+      const idx = items.findIndex((s) => s.id === selectedStock.id);
+      if (idx >= 0) {
+        items[idx] = { ...items[idx], quantity: Math.max(0, items[idx].quantity - quantity) };
+        saveStocks(locationId, items);
+      }
+    }
 
     setSchedule("");
     setQuantity(0);
     setNotes("");
     setRev(r => r + 1);
-    toast({ title: "Submitted for approval", description: `Schedule ${entry.schedule}` });
+    toast({ title: "Saved", description: `Schedule ${entry.schedule}` });
   };
 
   const addStock = () => {

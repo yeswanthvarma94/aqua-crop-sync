@@ -13,8 +13,7 @@ import { useNavigate } from "react-router-dom";
 import { useSelection } from "@/state/SelectionContext";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { useEffect as ReactUseEffect } from "react";
-import { enqueueChange } from "@/lib/approvals";
+import { supabase } from "@/integrations/supabase/client";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/state/AuthContext";
 
@@ -165,32 +164,35 @@ const Materials = () => {
       return;
     }
 
-    const entry: MaterialLogEntry = {
-      tankId: tank.id,
-      stockId: selectedStock.id,
-      stockName: selectedStock.name,
-      category: selectedStock.category,
-      unit: selectedStock.unit,
-      quantity,
-      time: timeStr,
-      notes: notes || undefined,
-      createdAt: new Date().toISOString(),
-    };
+    try {
+      const datePart = todayKey.slice(0, 10);
+      const timePart = timeStr.padStart(5, "0");
+      const loggedAt = new Date(`${datePart}T${timePart}:00.000Z`).toISOString();
 
-    await enqueueChange("materials/log", {
-      accountId,
-      locationId: location.id,
-      tankId: tank.id,
-      dateKey: todayKey,
-      entry,
-      stockId: selectedStock.id,
-      quantity,
-    }, `Materials: ${entry.stockName} — ${entry.quantity} ${entry.unit}`);
+      await supabase.from("material_logs").insert([
+        {
+          account_id: accountId,
+          location_id: location.id,
+          stock_id: selectedStock.id,
+          tank_id: tank.id,
+          quantity,
+          note: notes || null,
+          logged_at: loggedAt,
+        },
+      ]);
 
-    setQuantity(0);
-    setNotes("");
-    toast({ title: "Submitted for approval", description: `${entry.stockName} — ${entry.quantity} ${entry.unit}` });
-    setRev(r => r + 1);
+      await supabase
+        .from("stocks")
+        .update({ quantity: Math.max(0, (selectedStock.quantity || 0) - quantity) })
+        .eq("id", selectedStock.id);
+
+      setQuantity(0);
+      setNotes("");
+      toast({ title: "Saved", description: `${entry.stockName} — ${entry.quantity} ${entry.unit}` });
+      setRev(r => r + 1);
+    } catch (e) {
+      toast({ title: "Error", description: "Failed to save usage.", variant: "destructive" });
+    }
   };
 
   return (

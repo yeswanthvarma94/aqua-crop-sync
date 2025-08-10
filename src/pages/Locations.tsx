@@ -8,9 +8,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Pencil, Trash2, ListTree, Clock, Info } from "lucide-react";
-import { useSelection } from "@/state/SelectionContext";
-import { enqueueChange } from "@/lib/approvals";
+import { Pencil, Trash2, ListTree } from "lucide-react";
 import { useAuth } from "@/state/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -50,11 +48,9 @@ const Locations = () => {
   useSEO("Locations | AquaLedger", "Manage farm locations: list, create, edit, delete.");
   const navigate = useNavigate();
   const { setLocation, setTank } = useSelection();
-  const { accountId, user, hasRole } = useAuth();
+  const { accountId } = useAuth();
 
   const [locations, setLocations] = useState<Location[]>([]);
-  const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([]);
-  const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Location | null>(null);
   const [form, setForm] = useState<Pick<Location, "name" | "address">>({ name: "", address: "" });
 
@@ -75,56 +71,32 @@ const Locations = () => {
     if (!error) setLocations(data as any);
   };
 
-  const loadPendingChanges = async () => {
-    if (!accountId) return;
-    const { data, error } = await supabase
-      .from("pending_changes")
-      .select("id, type, description, payload, created_at, status")
-      .eq("account_id", accountId)
-      .eq("status", "pending")
-      .in("type", ["locations/create", "locations/update", "locations/delete"])
-      .order("created_at", { ascending: false });
-    if (!error) setPendingChanges(data as any);
-  };
 
   useEffect(() => {
     load();
-    loadPendingChanges();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountId]);
 
   const onSubmit = async () => {
     if (!isValid) return;
     if (!accountId) return;
-    
     try {
       if (editing) {
-        await enqueueChange("locations/update", { id: editing.id, updates: { name: form.name.trim(), address: form.address?.trim() } }, `Update Location: ${editing.name}`);
-        toast({
-          title: "Update Requested",
-          description: hasRole(["owner"]) 
-            ? "Location update has been queued for approval. Visit the Approvals page to approve it."
-            : "Location update has been sent for approval. An owner will review it soon.",
-        });
+        const updates = { name: form.name.trim(), address: form.address?.trim() || null };
+        const { error } = await supabase.from("locations").update(updates).eq("id", editing.id);
+        if (error) throw error;
+        toast({ title: "Location updated", description: updates.name });
       } else {
-        const newLoc: Location = { id: crypto.randomUUID(), name: form.name.trim(), address: form.address?.trim(), account_id: accountId };
-        await enqueueChange("locations/create", { location: newLoc }, `Create Location: ${newLoc.name}`);
-        toast({
-          title: "Location Creation Requested",
-          description: hasRole(["owner"]) 
-            ? "Your location has been queued for approval. Visit the Approvals page to approve it."
-            : "Your location has been sent for approval. An owner will review it soon.",
-        });
+        const toInsert = { account_id: accountId, name: form.name.trim(), address: form.address?.trim() || null } as any;
+        const { error } = await supabase.from("locations").insert([toInsert]);
+        if (error) throw error;
+        toast({ title: "Location created", description: toInsert.name });
       }
       setOpen(false);
       resetForm();
-      loadPendingChanges();
+      await load();
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to submit request. Please try again.",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Failed to save. Please try again.", variant: "destructive" });
     }
   };
 
@@ -136,20 +108,12 @@ const Locations = () => {
 
   const onDelete = async (id: string) => {
     try {
-      await enqueueChange("locations/delete", { id }, `Delete Location`);
-      toast({
-        title: "Deletion Requested",
-        description: hasRole(["owner"]) 
-          ? "Location deletion has been queued for approval. Visit the Approvals page to approve it."
-          : "Location deletion has been sent for approval. An owner will review it soon.",
-      });
-      loadPendingChanges();
+      const { error } = await supabase.from("locations").delete().eq("id", id);
+      if (error) throw error;
+      toast({ title: "Location deleted" });
+      await load();
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to submit deletion request. Please try again.",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Failed to delete. Please try again.", variant: "destructive" });
     }
   };
 
@@ -192,46 +156,6 @@ const Locations = () => {
         </Dialog>
       </header>
 
-      {pendingChanges.length > 0 && (
-        <Card className="border-orange-200 bg-orange-50">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-orange-800 flex items-center gap-2">
-              <Clock className="h-4 w-4" />
-              Pending Location Changes ({pendingChanges.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {pendingChanges.map((change) => (
-                <div key={change.id} className="flex items-center justify-between p-2 bg-white rounded border">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-xs">
-                      {change.type.split('/')[1]}
-                    </Badge>
-                    <span className="text-sm">{change.description}</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(change.created_at).toLocaleDateString()}
-                  </span>
-                </div>
-              ))}
-            </div>
-            {hasRole(["owner"]) && (
-              <div className="mt-3 pt-3 border-t border-orange-200">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => navigate("/approvals")}
-                  className="w-full"
-                >
-                  <Info className="mr-2 h-4 w-4" />
-                  Go to Approvals to Review Changes
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
 
       <Card>
         <CardHeader>

@@ -10,8 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useSelection } from "@/state/SelectionContext";
 import { useAuth } from "@/state/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
-import { enqueueChange } from "@/lib/approvals";
 
 // Local types reused across modules
 interface StockRecord {
@@ -183,7 +183,7 @@ const useSEO = (title: string, description: string) => {
 
 const Expenses = () => {
   const { location, tank } = useSelection();
-  const { hasRole } = useAuth();
+  const { hasRole, accountId } = useAuth();
   const { toast } = useToast();
   const todayKey = format(new Date(), "yyyy-MM-dd");
 
@@ -287,7 +287,7 @@ const Expenses = () => {
   const isManager = hasRole(["manager"]);
   const fmt = (n: number) => (isManager ? "—" : `₹ ${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`);
 
-  const onAdd = () => {
+  const onAdd = async () => {
     if (!location?.id || !tank?.id) return;
     if (amount <= 0) {
       toast({ title: "Invalid amount", description: "Enter a positive amount." });
@@ -305,11 +305,28 @@ const Expenses = () => {
       createdAt: new Date().toISOString(),
     };
 
-    enqueueChange("expenses/add", { locationId: location.id, tankId: tank.id, entry }, `Expense: ${name} — ₹ ${entry.amount}`);
-
-    setAmount(0); setNotes(""); setCustomName(""); setCategory("manpower"); setDateStr(todayKey);
-    toast({ title: "Submitted for approval", description: `${name} — ₹ ${entry.amount.toFixed(2)}` });
-    setRev(r => r + 1);
+    try {
+      await supabase.from("expenses").insert([
+        {
+          account_id: accountId,
+          location_id: location.id,
+          tank_id: tank.id,
+          category,
+          name,
+          notes: entry.notes || null,
+          description: name,
+          amount: entry.amount,
+          incurred_at: entry.date,
+        },
+      ]);
+      const existing = loadExpenses(location.id, tank.id);
+      saveExpenses(location.id, tank.id, [entry, ...existing]);
+      setAmount(0); setNotes(""); setCustomName(""); setCategory("manpower"); setDateStr(todayKey);
+      toast({ title: "Saved", description: `${name} — ₹ ${entry.amount.toFixed(2)}` });
+      setRev(r => r + 1);
+    } catch (e) {
+      toast({ title: "Error", description: "Failed to save expense.", variant: "destructive" });
+    }
   };
 
   return (

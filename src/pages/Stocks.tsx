@@ -16,8 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar as CalendarIcon, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { differenceInCalendarDays, format } from "date-fns";
-import { formatIST, nowIST } from "@/lib/time";
-import { enqueueChange } from "@/lib/approvals";
+import { supabase } from "@/integrations/supabase/client";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/state/AuthContext";
 
@@ -146,25 +145,60 @@ const Stocks = () => {
       return;
     }
 
-    const now = nowIST().toISOString();
+    try {
+      const { data: existing } = await supabase
+        .from("stocks")
+        .select("id, quantity, total_amount")
+        .eq("account_id", accountId)
+        .eq("location_id", locationId)
+        .eq("name", name)
+        .eq("unit", unit)
+        .maybeSingle();
 
-    await enqueueChange("stocks/upsert", {
-      accountId,
-      locationId,
-      name,
-      category,
-      unit,
-      quantity,
-      pricePerUnit,
-      minStock,
-      expiryISO: expiry ? expiry.toISOString() : undefined,
-      notes: notes || undefined,
-      nowISO: now,
-    }, `Stock: ${name} +${quantity} ${unit}`);
+      const qty = Number(quantity || 0);
+      const ppu = Number(pricePerUnit || 0);
+      const incrAmount = qty * ppu;
 
-    setRev(r => r + 1);
-    handleOpen(false);
-    toast({ title: "Submitted for approval", description: `${name} — ${quantity} ${unit}` });
+      if (existing?.id) {
+        const currentQty = Number((existing as any).quantity || 0);
+        const currentTotal = Number((existing as any).total_amount || 0);
+        const { error } = await supabase
+          .from("stocks")
+          .update({
+            quantity: Math.max(0, currentQty + qty),
+            price_per_unit: ppu,
+            min_stock: Number(minStock || 0),
+            expiry_date: expiry ? format(expiry, "yyyy-MM-dd") : null,
+            notes: notes || null,
+            total_amount: currentTotal + incrAmount,
+          })
+          .eq("id", (existing as any).id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("stocks").insert([
+          {
+            account_id: accountId,
+            location_id: locationId,
+            name,
+            category,
+            unit,
+            quantity: Math.max(0, qty),
+            price_per_unit: ppu,
+            min_stock: Number(minStock || 0),
+            expiry_date: expiry ? format(expiry, "yyyy-MM-dd") : null,
+            notes: notes || null,
+            total_amount: incrAmount,
+          },
+        ]);
+        if (error) throw error;
+      }
+
+      setRev(r => r + 1);
+      handleOpen(false);
+      toast({ title: "Saved", description: `${name} — ${quantity} ${unit}` });
+    } catch (e) {
+      toast({ title: "Error", description: "Failed to save stock.", variant: "destructive" });
+    }
   };
 
   return (
