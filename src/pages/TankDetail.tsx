@@ -146,8 +146,8 @@ const TankDetailPage = () => {
   const todayKey = format(new Date(), "yyyy-MM-dd");
   const [stocks, setStocks] = useState<StockRecord[]>([]);
   const feedStocks = useMemo(() => stocks.filter(s => s.category === "feed"), [stocks]);
-  const [selectedStockName, setSelectedStockName] = useState<string>("");
-  const selectedStock = useMemo(() => feedStocks.find(s => s.name === selectedStockName), [feedStocks, selectedStockName]);
+  const [selectedStockId, setSelectedStockId] = useState<string>("");
+  const selectedStock = useMemo(() => feedStocks.find(s => s.id === selectedStockId), [feedStocks, selectedStockId]);
   const [schedule, setSchedule] = useState<string>("");
   const scheduleOptions = type === "shrimp" ? ["1","2","3","4"] : ["1"];
   const [quantity, setQuantity] = useState<number>(0);
@@ -311,6 +311,7 @@ const TankDetailPage = () => {
       setStocks(sList);
     }
 
+    setEntries(list);
     setSchedule("");
     setQuantity(0);
     setNotes("");
@@ -346,7 +347,13 @@ const TankDetailPage = () => {
     }
     saveStocks(locationId, list);
     setStocks(list);
-    setSelectedStockName(name);
+    // Select the merged/new stock by id
+    if (idx >= 0) {
+      setSelectedStockId(list[idx].id);
+    } else {
+      const created = list[0];
+      setSelectedStockId(created.id);
+    }
     setAddOpen(false);
     setNewStockName(""); setNewStockQty(0); setNewStockUnit("kg"); setNewStockPpu(0);
     toast({ title: "Stock added", description: `${name} updated.` });
@@ -478,13 +485,13 @@ const TankDetailPage = () => {
                   <Label>Feed Stock</Label>
                   <div className="flex items-center gap-2">
                     <div className="flex-1">
-                      <Select value={selectedStockName} onValueChange={setSelectedStockName}>
+                      <Select value={selectedStockId} onValueChange={setSelectedStockId}>
                         <SelectTrigger>
                           <SelectValue placeholder="Select stock" />
                         </SelectTrigger>
                         <SelectContent>
                           {feedStocks.map((s) => (
-                            <SelectItem key={s.id} value={s.name}>{s.name} — {s.unit.toUpperCase()}</SelectItem>
+                            <SelectItem key={s.id} value={s.id}>{s.name} — {s.unit.toUpperCase()}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -562,7 +569,7 @@ const TankDetailPage = () => {
               </div>
 
               <div>
-                <Button onClick={saveFeedingEntry}>Save Feeding</Button>
+                <Button onClick={saveFeedingEntry} disabled={!hasActiveCrop || !schedule || completed.has(schedule) || !selectedStock || quantity <= 0 || quantity > remainingStock}>Save Feeding</Button>
               </div>
 
               <div className="pt-2">
