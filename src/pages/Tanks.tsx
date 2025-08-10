@@ -8,8 +8,28 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useSelection } from "@/state/SelectionContext";
+import { cropDayFromStartIST } from "@/lib/time";
 
 interface Tank { id: string; locationId: string; name: string; type: "shrimp" | "fish" }
+
+interface TankDetail {
+  seedDate?: string;
+  seedWeight?: number;
+  plSize?: number;
+  totalSeed?: number;
+  areaAcres?: number;
+  price?: number;
+  cropEnd?: string;
+}
+
+const loadDetail = (tankId: string): TankDetail | null => {
+  try {
+    const raw = localStorage.getItem(`tankDetail:${tankId}`);
+    return raw ? (JSON.parse(raw) as TankDetail) : null;
+  } catch {
+    return null;
+  }
+};
 
 const loadTanks = (): Tank[] => {
   try {
@@ -59,6 +79,12 @@ const Tanks = () => {
   }, [location, locationId, setLocation]);
 
   const tanks = useMemo(() => tanksAll.filter((t) => t.locationId === locationId), [tanksAll, locationId]);
+  const details = useMemo(() => {
+    const map = new Map<string, TankDetail | null>();
+    const list = tanksAll.filter((t) => t.locationId === locationId);
+    list.forEach((t) => map.set(t.id, loadDetail(t.id)));
+    return map;
+  }, [tanksAll, locationId]);
 
   const handleSelectTank = (t: Tank) => {
     setTank({ id: t.id, name: t.name, type: t.type });
@@ -128,20 +154,35 @@ const Tanks = () => {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Type</TableHead>
+                <TableHead>Seed Date</TableHead>
+                <TableHead>Seed Info</TableHead>
+                <TableHead>Total Seed</TableHead>
+                <TableHead>Area (acres)</TableHead>
+                <TableHead>Price</TableHead>
+                <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {tanks.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={2} className="text-center text-muted-foreground">No tanks found for this location.</TableCell>
+                  <TableCell colSpan={8} className="text-center text-muted-foreground">No tanks found for this location.</TableCell>
                 </TableRow>
               ) : (
-                tanks.map((t) => (
-                  <TableRow key={t.id} onClick={() => handleSelectTank(t)} className="cursor-pointer">
-                    <TableCell className="font-medium">{t.name}</TableCell>
-                    <TableCell className="capitalize">{t.type}</TableCell>
-                  </TableRow>
-                ))
+                tanks.map((t) => {
+                  const d = details.get(t.id);
+                  return (
+                    <TableRow key={t.id} onClick={() => handleSelectTank(t)} className="cursor-pointer">
+                      <TableCell className="font-medium">{t.name}</TableCell>
+                      <TableCell className="capitalize">{t.type}</TableCell>
+                      <TableCell>{d?.seedDate ? new Date(d.seedDate).toLocaleDateString() : "—"}</TableCell>
+                      <TableCell>{t.type === "fish" ? (d?.seedWeight != null ? `${d.seedWeight} g` : "—") : (d?.plSize != null ? `PL ${d.plSize}` : "—")}</TableCell>
+                      <TableCell>{d?.totalSeed ?? "—"}</TableCell>
+                      <TableCell>{d?.areaAcres ?? "—"}</TableCell>
+                      <TableCell>{d?.price ?? "—"}</TableCell>
+                      <TableCell>{d?.seedDate && !d?.cropEnd ? `Day ${cropDayFromStartIST(new Date(d.seedDate))}` : d?.cropEnd ? `Ended` : "—"}</TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>

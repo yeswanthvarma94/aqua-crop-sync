@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -23,6 +23,7 @@ interface TankDetail {
   plSize?: number; // shrimp only
   totalSeed?: number;
   areaAcres?: number;
+  price?: number;
   cropStart?: string; // ISO
   cropEnd?: string; // ISO
 }
@@ -94,6 +95,7 @@ const TankDetailPage = () => {
   const [plSize, setPlSize] = useState<number | undefined>(undefined);
   const [totalSeed, setTotalSeed] = useState<number | undefined>(undefined);
   const [areaAcres, setAreaAcres] = useState<number | undefined>(undefined);
+  const [price, setPrice] = useState<number | undefined>(undefined);
   const [cropEnd, setCropEnd] = useState<Date | undefined>(undefined);
 
   // Load existing active crop if any
@@ -108,6 +110,7 @@ const TankDetailPage = () => {
       setPlSize(existing.plSize);
       setTotalSeed(existing.totalSeed);
       setAreaAcres(existing.areaAcres);
+      setPrice(existing.price);
       setCropEnd(existing.cropEnd ? new Date(existing.cropEnd) : undefined);
     }
   }, [tankId]);
@@ -147,12 +150,14 @@ const TankDetailPage = () => {
       plSize: type === "shrimp" ? plSize : undefined,
       totalSeed,
       areaAcres,
+      price,
       cropStart: seedDate ? seedDate.toISOString() : undefined,
       cropEnd: cropEnd ? cropEnd.toISOString() : undefined,
     };
 
     saveActiveDetail(tankId, detail);
     toast({ title: "Saved", description: "Tank details have been saved." });
+    navigate(`/locations/${locationId}/tanks`);
   };
 
   const handleEndCrop = () => {
@@ -167,6 +172,7 @@ const TankDetailPage = () => {
       plSize: type === "shrimp" ? plSize : undefined,
       totalSeed,
       areaAcres,
+      price,
       cropStart: seedDate ? seedDate.toISOString() : undefined,
       cropEnd: now.toISOString(),
     };
@@ -257,6 +263,12 @@ const TankDetailPage = () => {
               <Label htmlFor="areaAcres">Area (acres)</Label>
               <Input id="areaAcres" type="number" inputMode="decimal" step="0.01" value={areaAcres ?? ""} onChange={(e) => setAreaAcres(e.target.value === "" ? undefined : Number(e.target.value))} placeholder="e.g. 1.50" />
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="price">Price</Label>
+              <Input id="price" type="number" inputMode="decimal" step="0.01" value={price ?? ""} onChange={(e) => setPrice(e.target.value === "" ? undefined : Number(e.target.value))} placeholder="e.g. 25000" />
+            </div>
+
           </section>
 
           <div className="mt-6 flex items-center gap-2">
