@@ -34,7 +34,7 @@ const useSEO = (title: string, description: string) => {
 const Tanks = () => {
   const { locationId } = useParams();
   const navigate = useNavigate();
-  const { location, setLocation } = useSelection();
+  const { location, setLocation, setTank } = useSelection();
 
   useSEO("Tanks | AquaLedger", "View tanks for the selected location.");
 
@@ -47,6 +47,10 @@ const Tanks = () => {
   }, [location, locationId, setLocation]);
 
   const tanks = useMemo(() => loadTanks().filter((t) => t.locationId === locationId), [locationId]);
+
+  const handleSelectTank = (t: Tank) => {
+    setTank({ id: t.id, name: t.name, type: t.type });
+  };
 
   return (
     <main className="p-4 space-y-4">
@@ -74,7 +78,7 @@ const Tanks = () => {
                 </TableRow>
               ) : (
                 tanks.map((t) => (
-                  <TableRow key={t.id}>
+                  <TableRow key={t.id} onClick={() => handleSelectTank(t)} className="cursor-pointer">
                     <TableCell className="font-medium">{t.name}</TableCell>
                     <TableCell className="capitalize">{t.type}</TableCell>
                   </TableRow>
