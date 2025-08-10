@@ -15,6 +15,20 @@ import { AlertCircle } from "lucide-react";
 const Index = () => {
   const { user, accountId, hasRole } = useAuth();
   const navigate = useNavigate();
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    const loadPendingCount = async () => {
+      if (!accountId || !hasRole(["owner"])) return;
+      const { data, error } = await supabase
+        .from("pending_changes")
+        .select("id", { count: "exact" })
+        .eq("account_id", accountId)
+        .eq("status", "pending");
+      if (!error && data) setPendingCount(data.length);
+    };
+    loadPendingCount();
+  }, [accountId, hasRole]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -32,13 +46,38 @@ const Index = () => {
       </header>
 
       <main className="max-w-screen-md mx-auto px-4 pb-24 pt-4 space-y-4">
+        {hasRole(["owner"]) && pendingCount > 0 && (
+          <Card className="border-orange-200 bg-orange-50">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="h-5 w-5 text-orange-600" />
+                  <div>
+                    <p className="font-medium text-orange-800">
+                      {pendingCount} change{pendingCount === 1 ? '' : 's'} need{pendingCount === 1 ? 's' : ''} approval
+                    </p>
+                    <p className="text-sm text-orange-600">
+                      Review pending requests from team members
+                    </p>
+                  </div>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => navigate("/approvals")}>
+                  Review
+                  <Badge variant="secondary" className="ml-2">
+                    {pendingCount}
+                  </Badge>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>
             <CardTitle>Today at a glance</CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
-            Feed due vs given, materials used, today's expenses, low-stock
+            Feed due vs given, materials used, today's expenses, low-stock, pending approvals
           </CardContent>
         </Card>
 

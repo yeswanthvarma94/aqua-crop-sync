@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useSelection } from "@/state/SelectionContext";
 import { cropDayFromStartIST, nowIST } from "@/lib/time";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { enqueueChange } from "@/lib/approvals";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/state/AuthContext";
 
@@ -107,51 +107,26 @@ const Tanks = () => {
   const isValid = formName.trim().length > 0;
   const onCreateTank = async () => {
     if (!locationId || !isValid) return;
-    const toInsert = { id: crypto.randomUUID(), account_id: accountId, location_id: locationId, name: formName.trim(), type: formType } as any;
-    try {
-      const { error } = await supabase.from("tanks").insert([toInsert]);
-      if (error) throw error;
-      setOpen(false);
-      setFormName("");
-      setFormType("fish");
-      toast({ title: "Tank created", description: `${toInsert.name}` });
-      setRev((r) => r + 1);
-    } catch (e) {
-      toast({ title: "Error", description: "Failed to create tank.", variant: "destructive" });
-    }
+    const payload = { tank: { id: crypto.randomUUID(), locationId, name: formName.trim(), type: formType, account_id: accountId } };
+    await enqueueChange("tanks/create", payload as any, `Tank: ${payload.tank.name}`);
+    setOpen(false);
+    setFormName("");
+    setFormType("fish");
+    toast({ title: "Submitted for approval", description: `${payload.tank.name}` });
   };
 
   const onStartCrop = async (t: Tank) => {
     const now = nowIST();
-    try {
-      const { error } = await supabase.from("tank_crops").insert([{
-        account_id: accountId,
-        tank_id: t.id,
-        seed_date: now.toISOString().slice(0, 10),
-        end_date: null,
-      }]);
-      if (error) throw error;
-      setRev((r) => r + 1);
-      toast({ title: "Crop started", description: `${t.name}` });
-    } catch (e) {
-      toast({ title: "Error", description: "Failed to start crop.", variant: "destructive" });
-    }
+    await enqueueChange("tanks/start_crop", { tankId: t.id, iso: now.toISOString() }, `Start crop — ${t.name}`);
+    setRev((r) => r + 1);
+    toast({ title: "Submitted for approval", description: `${t.name}: start crop` });
   };
 
   const onEndCrop = async (t: Tank) => {
     const now = new Date();
-    try {
-      const { error } = await supabase
-        .from("tank_crops")
-        .update({ end_date: new Date(now).toISOString().slice(0, 10) })
-        .eq("tank_id", t.id)
-        .is("end_date", null);
-      if (error) throw error;
-      setRev((r) => r + 1);
-      toast({ title: "Crop ended", description: `${t.name}` });
-    } catch (e) {
-      toast({ title: "Error", description: "Failed to end crop.", variant: "destructive" });
-    }
+    await enqueueChange("tanks/end_crop", { tankId: t.id, iso: now.toISOString() }, `End crop — ${t.name}`);
+    setRev((r) => r + 1);
+    toast({ title: "Submitted for approval", description: `${t.name}: end crop` });
   };
 
   return (

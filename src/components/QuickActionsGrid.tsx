@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Building2, DatabaseZap, FileText, FlaskConical, Recycle, Scale, ShoppingCart, Users } from "lucide-react";
+import { Building2, DatabaseZap, FileText, FlaskConical, Recycle, Scale, ShieldCheck, ShoppingCart, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useSelection } from "@/state/SelectionContext";
 
@@ -11,6 +11,7 @@ const items = [
   { key: "reports", label: "Reports", icon: FileText },
   { key: "accounts", label: "Accounts", icon: Scale },
   { key: "calculators", label: "Calculators", icon: FlaskConical },
+  { key: "approvals", label: "Approvals", icon: ShieldCheck },
   { key: "recycle", label: "Recycle Bin", icon: Recycle },
   { key: "subscriptions", label: "Subscriptions", icon: Users },
 ] as const;
