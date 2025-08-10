@@ -33,6 +33,9 @@ const QuickActionsGrid = () => {
         if (location?.id) navigate(`/locations/${location.id}/stocks`);
         else navigate("/locations");
         break;
+      case "materials":
+        navigate("/materials");
+        break;
       default:
         break;
     }
