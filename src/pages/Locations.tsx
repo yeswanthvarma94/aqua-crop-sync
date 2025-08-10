@@ -99,7 +99,10 @@ const Locations = () => {
   return (
     <main className="p-4 space-y-4">
       <header className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Locations</h1>
+        <div className="flex items-center gap-4">
+          <Button variant="outline" size="sm" onClick={() => navigate("/")}>← Dashboard</Button>
+          <h1 className="text-xl font-semibold">Locations</h1>
+        </div>
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
           <DialogTrigger asChild>
             <Button size="sm">Add Location</Button>
