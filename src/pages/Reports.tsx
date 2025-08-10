@@ -191,14 +191,39 @@ const Reports = () => {
   const rootRef = useRef<HTMLDivElement>(null);
   const exportPDF = async () => {
     if (!rootRef.current) return;
-    const canvas = await html2canvas(rootRef.current, { scale: 2 });
+    // Ensure we're at the top and use high-res capture with CORS enabled
+    window.scrollTo(0, 0);
+    const canvas = await html2canvas(rootRef.current, {
+      scale: Math.min(2, window.devicePixelRatio || 1),
+      useCORS: true,
+      backgroundColor: "#ffffff",
+      logging: false,
+    });
     const imgData = canvas.toDataURL("image/png");
+
+    // Create multi-page PDF
     const pdf = new jsPDF({ orientation: "p", unit: "pt", format: "a4" });
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
-    const imgWidth = pageWidth - 40; // margins
-    const imgHeight = canvas.height * imgWidth / canvas.width;
-    pdf.addImage(imgData, "PNG", 20, 20, imgWidth, Math.min(imgHeight, pageHeight - 40));
+    const margin = 20;
+    const imgWidth = pageWidth - margin * 2;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+    let heightLeft = imgHeight;
+    let position = margin;
+
+    // First page
+    pdf.addImage(imgData, "PNG", margin, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight - margin * 2;
+
+    // Additional pages
+    while (heightLeft > 0) {
+      pdf.addPage();
+      position = margin - (imgHeight - heightLeft);
+      pdf.addImage(imgData, "PNG", margin, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight - margin * 2;
+    }
+
     pdf.save(`report-${format(new Date(), "yyyyMMdd-HHmm")}.pdf`);
   };
 
