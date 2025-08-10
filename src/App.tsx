@@ -18,6 +18,7 @@ import Stocks from "./pages/Stocks";
 import TankFeeding from "./pages/TankFeeding";
 import Reports from "./pages/Reports";
 import Approvals from "./pages/Approvals";
+import Auth from "./pages/Auth";
 const queryClient = new QueryClient();
 
 const App = () => (

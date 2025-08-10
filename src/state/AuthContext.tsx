@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { Capacitor } from "@capacitor/core";
+import { supabase } from "@/integrations/supabase/client";
 
 export type UserRole = "owner" | "manager" | "partner";
 export type UserStatus = "active" | "disabled";
@@ -16,6 +17,7 @@ export interface User {
 interface AuthContextValue {
   user: User | null;
   signInDev: (role?: UserRole) => Promise<void>;
+  signInLocal: (username: string, password: string) => Promise<{ ok: boolean; message?: string }>;
   signOut: () => Promise<void>;
   hasRole: (roles: UserRole[]) => boolean;
   isDevLoginEnabled: boolean;
@@ -24,6 +26,15 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const STORAGE_KEY = "aqualedger.session";
+const TEAM_KEY = "team.users";
+
+const hashPassword = async (pw: string) => {
+  if (!window.crypto?.subtle) return btoa(unescape(encodeURIComponent(pw)));
+  const enc = new TextEncoder().encode(pw);
+  const buf = await crypto.subtle.digest("SHA-256", enc);
+  const arr = Array.from(new Uint8Array(buf));
+  return arr.map((b) => b.toString(16).padStart(2, "0")).join("");
+};
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -36,6 +47,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) setUser(JSON.parse(raw));
     } catch {}
+
+    // Supabase auth listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const sUser = session?.user;
+      if (sUser) {
+        const mapped: User = {
+          id: sUser.id,
+          name: (sUser.user_metadata?.name as string) || sUser.email || sUser.phone || "User",
+          email: sUser.email || undefined,
+          phone: (sUser as any).phone || undefined,
+          role: "manager", // default; team roles via local login
+          status: "active",
+        };
+        setUser(mapped);
+      } else {
+        // Don't force logout of dev/local user here; only clear if no local session persisted
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) setUser(null);
+      }
+    });
+
+    // Initialize current session
+    supabase.auth.getSession().then(({ data }) => {
+      const sUser = data.session?.user;
+      if (sUser) {
+        const mapped: User = {
+          id: sUser.id,
+          name: (sUser.user_metadata?.name as string) || sUser.email || sUser.phone || "User",
+          email: sUser.email || undefined,
+          phone: (sUser as any).phone || undefined,
+          role: "manager",
+          status: "active",
+        };
+        setUser(mapped);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -58,14 +107,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(devUser);
   };
 
+  const signInLocal = async (username: string, password: string) => {
+    try {
+      const raw = localStorage.getItem(TEAM_KEY);
+      const team: Array<{ id: string; username: string; name: string; role: UserRole; passwordHash: string }> = raw ? JSON.parse(raw) : [];
+      const u = team.find((t) => t.username.toLowerCase() === username.toLowerCase());
+      if (!u) return { ok: false, message: "Invalid username or password" };
+      const h = await hashPassword(password);
+      if (h !== u.passwordHash) return { ok: false, message: "Invalid username or password" };
+      const mapped: User = { id: u.id, name: u.name, role: u.role, status: "active" } as User;
+      setUser(mapped);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, message: (e as Error).message };
+    }
+  };
+
   const signOut = async () => {
+    try { await supabase.auth.signOut({ scope: "global" } as any); } catch {}
     setUser(null);
   };
 
   const hasRole = (roles: UserRole[]) => (user ? roles.includes(user.role) : false);
 
   const value = useMemo(
-    () => ({ user, signInDev, signOut, hasRole, isDevLoginEnabled }),
+    () => ({ user, signInDev, signInLocal, signOut, hasRole, isDevLoginEnabled }),
     [user, isDevLoginEnabled]
   );
 
