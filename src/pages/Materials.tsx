@@ -116,13 +116,13 @@ const Materials = () => {
     const end = new Date(`${dateKey}T23:59:59.999Z`);
     const { data, error } = await supabase
       .from("material_logs")
-      .select("id, stock_id, quantity, time, notes, tank_id, location_id")
+      .select("id, stock_id, quantity, note, tank_id, location_id, logged_at")
       .eq("account_id", accountId)
       .eq("location_id", locationId)
       .eq("tank_id", tankId)
-      .gte("time", start.toISOString())
-      .lte("time", end.toISOString())
-      .order("time", { ascending: true });
+      .gte("logged_at", start.toISOString())
+      .lte("logged_at", end.toISOString())
+      .order("logged_at", { ascending: true });
     if (!error) {
       const mapped: MaterialLogEntry[] = (data || []).map((e: any) => ({
         tankId: e.tank_id,
@@ -131,9 +131,9 @@ const Materials = () => {
         category: "others",
         unit: "kg",
         quantity: Number(e.quantity),
-        time: new Date(e.time).toISOString().slice(11, 16),
-        notes: e.notes || undefined,
-        createdAt: e.time,
+        time: new Date(e.logged_at).toISOString().slice(11, 16),
+        notes: e.note || undefined,
+        createdAt: e.logged_at,
       }));
       setEntries(mapped);
     }

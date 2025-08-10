@@ -56,20 +56,31 @@ const Approvals = () => {
     try {
       switch (c.type) {
         case "materials/log": {
-          const { accountId: acc, tankId, entry, stockId, quantity } = c.payload;
-          // Insert material log (matches schema: account_id, stock_id, tank_id, quantity, note, logged_at default)
-          await supabase.from("material_logs").insert([{
-            account_id: acc || accountId,
-            stock_id: stockId || null,
-            tank_id: tankId || null,
-            quantity: Number(quantity || 0),
-            note: entry?.notes || null,
-          }]);
-          // Decrement stock
+          const { accountId: acc, locationId, tankId, dateKey, entry, stockId, quantity } = c.payload;
+          const account = acc || accountId;
+          const datePart = (dateKey || new Date().toISOString().slice(0, 10)).slice(0, 10);
+          const timePart = ((entry?.time as string) || "00:00").padStart(5, "0");
+          const loggedAt = new Date(`${datePart}T${timePart}:00.000Z`).toISOString();
+
+          await supabase.from("material_logs").insert([
+            {
+              account_id: account,
+              location_id: locationId || null,
+              stock_id: stockId || null,
+              tank_id: tankId || null,
+              quantity: Number(quantity || 0),
+              note: entry?.notes || null,
+              logged_at: loggedAt,
+            },
+          ]);
+
           if (stockId) {
             const { data: s } = await supabase.from("stocks").select("quantity").eq("id", stockId).maybeSingle();
             const currentQty = Number((s as any)?.quantity || 0);
-            await supabase.from("stocks").update({ quantity: Math.max(0, currentQty - Number(quantity || 0)) }).eq("id", stockId);
+            await supabase
+              .from("stocks")
+              .update({ quantity: Math.max(0, currentQty - Number(quantity || 0)) })
+              .eq("id", stockId);
           }
           break;
         }
@@ -80,61 +91,98 @@ const Approvals = () => {
           existing.push(entry);
           saveFeedingLocal(locationId, tankId, dateKey, existing);
 
-          // Store as material log in DB
-          await supabase.from("material_logs").insert([{
-            account_id: acc || accountId,
-            stock_id: stockId || null,
-            tank_id: tankId || null,
-            quantity: Number(quantity || 0),
-            note: entry?.notes || null,
-          }]);
+          const account = acc || accountId;
+          const datePart = (dateKey || new Date().toISOString().slice(0, 10)).slice(0, 10);
+          const timePart = ((entry?.time as string) || "00:00").padStart(5, "0");
+          const loggedAt = new Date(`${datePart}T${timePart}:00.000Z`).toISOString();
+
+          await supabase.from("material_logs").insert([
+            {
+              account_id: account,
+              location_id: locationId || null,
+              stock_id: stockId || null,
+              tank_id: tankId || null,
+              quantity: Number(quantity || 0),
+              note: entry?.notes || null,
+              logged_at: loggedAt,
+            },
+          ]);
 
           if (stockId) {
             const { data: s2 } = await supabase.from("stocks").select("quantity").eq("id", stockId).maybeSingle();
             const currentQty2 = Number((s2 as any)?.quantity || 0);
-            await supabase.from("stocks").update({ quantity: Math.max(0, currentQty2 - Number(quantity || 0)) }).eq("id", stockId);
+            await supabase
+              .from("stocks")
+              .update({ quantity: Math.max(0, currentQty2 - Number(quantity || 0)) })
+              .eq("id", stockId);
           }
           break;
         }
         case "expenses/add": {
-          const { accountId: acc, entry } = c.payload;
-          // expenses schema: account_id, description, amount, incurred_at (date)
-          const incurredAt = entry?.dateKey
-            ? new Date(entry.dateKey).toISOString().slice(0, 10)
-            : new Date().toISOString().slice(0, 10);
-          await supabase.from("expenses").insert([{
-            account_id: acc || accountId,
-            description: entry?.description || null,
-            amount: Number(entry?.amount || 0),
-            incurred_at: incurredAt,
-          }]);
+          const { accountId: acc, locationId, tankId, entry } = c.payload;
+          const account = acc || accountId;
+          const incurredAt = (entry?.date || entry?.dateKey || new Date().toISOString().slice(0, 10)).slice(0, 10);
+          await supabase.from("expenses").insert([
+            {
+              account_id: account,
+              location_id: locationId || null,
+              tank_id: tankId || null,
+              category: entry?.category || null,
+              name: entry?.name || null,
+              notes: entry?.notes || null,
+              description: entry?.name || entry?.category || 'Expense',
+              amount: Number(entry?.amount || 0),
+              incurred_at: incurredAt,
+            },
+          ]);
           break;
         }
         case "stocks/upsert": {
-          const { accountId: acc, name, unit, quantity } = c.payload;
+          const { accountId: acc, locationId, name, unit, quantity, category, pricePerUnit, minStock, expiryISO, notes } = c.payload;
           const account = acc || accountId;
           if (!account) throw new Error("No account available for stocks");
-          // Simplified to match schema: unique by (account_id, name, unit?) - unit may be null
+
           const { data: existing } = await supabase
             .from("stocks")
-            .select("id, quantity, unit, name")
+            .select("id, quantity, total_amount")
             .eq("account_id", account)
+            .eq("location_id", locationId)
             .eq("name", name)
-            .is("unit", unit == null ? null : undefined)
+            .eq("unit", unit)
             .maybeSingle();
+
+          const qty = Number(quantity || 0);
+          const ppu = Number(pricePerUnit || 0);
+          const incrAmount = qty * ppu;
 
           if (existing?.id) {
             await supabase
               .from("stocks")
-              .update({ quantity: Math.max(0, Number((existing as any).quantity || 0) + Number(quantity || 0)) })
+              .update({
+                quantity: Math.max(0, Number((existing as any).quantity || 0) + qty),
+                price_per_unit: ppu,
+                min_stock: Number(minStock || 0),
+                expiry_date: expiryISO ? new Date(expiryISO).toISOString().slice(0, 10) : null,
+                notes: notes || null,
+                total_amount: Number((existing as any).total_amount || 0) + incrAmount,
+              })
               .eq("id", (existing as any).id);
           } else {
-            await supabase.from("stocks").insert([{
-              account_id: account,
-              name,
-              unit: unit || null,
-              quantity: Math.max(0, Number(quantity || 0)),
-            }]);
+            await supabase.from("stocks").insert([
+              {
+                account_id: account,
+                location_id: locationId || null,
+                name,
+                category: category || null,
+                unit,
+                quantity: Math.max(0, qty),
+                price_per_unit: ppu,
+                min_stock: Number(minStock || 0),
+                expiry_date: expiryISO ? new Date(expiryISO).toISOString().slice(0, 10) : null,
+                notes: notes || null,
+                total_amount: incrAmount,
+              },
+            ]);
           }
           break;
         }
