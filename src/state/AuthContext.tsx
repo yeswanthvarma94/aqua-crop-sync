@@ -61,7 +61,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           name: (sUser.user_metadata?.name as string) || sUser.email || sUser.phone || "User",
           email: sUser.email || undefined,
           phone: (sUser as any).phone || undefined,
-          role: "manager",
+          role: "owner",
           status: "active",
         };
         setUser(mapped);
@@ -97,7 +97,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           name: (sUser.user_metadata?.name as string) || sUser.email || sUser.phone || "User",
           email: sUser.email || undefined,
           phone: (sUser as any).phone || undefined,
-          role: "manager",
+          role: "owner",
           status: "active",
         };
         setUser(mapped);

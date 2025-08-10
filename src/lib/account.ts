@@ -29,6 +29,14 @@ export const ensureDefaultAccount = async (userId: string): Promise<string> => {
   // If an active account is already set and user is member, use it
   const existing = getActiveAccountId();
   if (existing) {
+    const { data: ownedExisting } = await supabase
+      .from("accounts")
+      .select("id")
+      .eq("id", existing)
+      .eq("owner_id", userId)
+      .maybeSingle();
+    if (ownedExisting) return existing;
+
     const { data: m } = await supabase
       .from("account_members")
       .select("id")
@@ -38,7 +46,19 @@ export const ensureDefaultAccount = async (userId: string): Promise<string> => {
     if (m) return existing;
   }
 
-  // Find any memberships for this user
+  // Prefer any account owned by this user
+  const { data: ownedAccounts, error: ownErr } = await supabase
+    .from("accounts")
+    .select("id")
+    .eq("owner_id", userId)
+    .limit(1);
+  if (!ownErr && ownedAccounts && ownedAccounts.length > 0) {
+    const accountId = (ownedAccounts[0] as any).id as string;
+    setActiveAccountId(accountId);
+    return accountId;
+  }
+
+  // Otherwise find any memberships for this user
   const { data: memberships, error: memErr } = await supabase
     .from("account_members")
     .select("account_id")
