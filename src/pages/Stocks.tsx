@@ -16,6 +16,7 @@ import { Calendar as CalendarIcon, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { differenceInCalendarDays, format } from "date-fns";
 import { formatIST, nowIST } from "@/lib/time";
+import { enqueueChange } from "@/lib/approvals";
 
 interface StockRecord {
   id: string;
@@ -129,57 +130,24 @@ const Stocks = () => {
       return;
     }
 
-    const list = loadStocks(locationId);
-    const idx = list.findIndex(
-      s => s.name.toLowerCase() === name.toLowerCase() && s.category === category && s.unit === unit
-    );
-
-    const amount = pricePerUnit * quantity;
     const now = nowIST().toISOString();
 
-    if (idx >= 0) {
-      const s = list[idx];
-      const updated: StockRecord = {
-        ...s,
-        quantity: Math.max(0, (s.quantity || 0) + quantity),
-        totalAmount: (s.totalAmount || 0) + amount,
-        pricePerUnit,
-        minStock: Math.max(0, minStock),
-        expiryDate: expiry ? expiry.toISOString() : s.expiryDate,
-        notes: notes || s.notes,
-        updatedAt: now,
-      };
-      list[idx] = updated;
-    } else {
-      const created: StockRecord = {
-        id: crypto.randomUUID(),
-        name,
-        category,
-        unit,
-        quantity: Math.max(0, quantity),
-        pricePerUnit,
-        totalAmount: amount,
-        minStock: Math.max(0, minStock),
-        expiryDate: expiry ? expiry.toISOString() : undefined,
-        notes: notes || undefined,
-        createdAt: now,
-        updatedAt: now,
-      };
-      list.unshift(created);
-    }
+    enqueueChange("stocks/upsert", {
+      locationId,
+      name,
+      category,
+      unit,
+      quantity,
+      pricePerUnit,
+      minStock,
+      expiryISO: expiry ? expiry.toISOString() : undefined,
+      notes: notes || undefined,
+      nowISO: now,
+    }, `Stock: ${name} +${quantity} ${unit}`);
 
-    saveStocks(locationId, list);
     setRev(r => r + 1);
     handleOpen(false);
-
-    if (expiry) {
-      const days = differenceInCalendarDays(expiry, nowIST());
-      if (days <= 30 && days >= 0) {
-        toast({ title: "Expiry soon", description: `${name} expires in ${days} day(s).` });
-      }
-    }
-
-    toast({ title: "Stock saved", description: `${name} updated successfully.` });
+    toast({ title: "Submitted for approval", description: `${name} — ${quantity} ${unit}` });
   };
 
   return (

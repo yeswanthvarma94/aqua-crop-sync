@@ -13,6 +13,7 @@ import { useSelection } from "@/state/SelectionContext";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { useEffect as ReactUseEffect } from "react";
+import { enqueueChange } from "@/lib/approvals";
 
 // Types reused from Stocks
 interface StockRecord {
@@ -132,7 +133,6 @@ const Materials = () => {
       return;
     }
 
-    const logs = loadLogs(location.id, tank.id, todayKey);
     const entry: MaterialLogEntry = {
       tankId: tank.id,
       stockId: selectedStock.id,
@@ -144,24 +144,20 @@ const Materials = () => {
       notes: notes || undefined,
       createdAt: new Date().toISOString(),
     };
-    logs.push(entry);
-    saveLogs(location.id, tank.id, todayKey, logs);
 
-    // Deduct stock
-    const sList = loadStocks(location.id);
-    const idx = sList.findIndex(s => s.id === selectedStock.id);
-    if (idx >= 0) {
-      const cur = sList[idx];
-      sList[idx] = { ...cur, quantity: Math.max(0, cur.quantity - quantity), updatedAt: new Date().toISOString() };
-      saveStocks(location.id, sList);
-      setStocks(sList);
-    }
+    enqueueChange("materials/log", {
+      locationId: location.id,
+      tankId: tank.id,
+      dateKey: todayKey,
+      entry,
+      stockId: selectedStock.id,
+      quantity,
+    }, `Materials: ${entry.stockName} — ${entry.quantity} ${entry.unit}`);
 
-    setEntries(logs);
     setQuantity(0);
     setNotes("");
+    toast({ title: "Submitted for approval", description: `${entry.stockName} — ${entry.quantity} ${entry.unit}` });
     setRev(r => r + 1);
-    toast({ title: "Usage logged", description: `${entry.stockName} — ${entry.quantity} ${entry.unit}` });
   };
 
   return (

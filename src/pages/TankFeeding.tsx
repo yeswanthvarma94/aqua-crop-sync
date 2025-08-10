@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cropDayFromStartIST } from "@/lib/time";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { enqueueChange } from "@/lib/approvals";
 
 interface Tank { id: string; locationId: string; name: string; type: "shrimp" | "fish" }
 interface TankDetail { seedDate?: string; cropEnd?: string; name: string; type: "shrimp" | "fish" }
@@ -170,7 +171,6 @@ const TankFeeding = () => {
       return;
     }
 
-    const list = loadFeeding(locationId, tankId, todayKey);
     const entry: FeedingEntry = {
       schedule,
       stockName: selectedStock.name,
@@ -180,25 +180,21 @@ const TankFeeding = () => {
       notes: notes || undefined,
       createdAt: new Date().toISOString(),
     };
-    list.push(entry);
-    saveFeeding(locationId, tankId, todayKey, list);
 
-    // Deduct stock
-    const sList = loadStocks(locationId);
-    const idx = sList.findIndex(s => s.id === selectedStock.id);
-    if (idx >= 0) {
-      const cur = sList[idx];
-      sList[idx] = { ...cur, quantity: Math.max(0, cur.quantity - quantity), updatedAt: new Date().toISOString() };
-      saveStocks(locationId, sList);
-      setStocks(sList);
-    }
+    enqueueChange("feeding/log", {
+      locationId,
+      tankId,
+      dateKey: todayKey,
+      entry,
+      stockId: selectedStock.id,
+      quantity,
+    }, `Feeding S${entry.schedule}: ${entry.quantity} ${entry.unit} — ${entry.stockName}`);
 
-    setEntries(list);
     setSchedule("");
     setQuantity(0);
     setNotes("");
     setRev(r => r + 1);
-    toast({ title: "Feeding saved", description: `Schedule ${entry.schedule} recorded.` });
+    toast({ title: "Submitted for approval", description: `Schedule ${entry.schedule}` });
   };
 
   const addStock = () => {
@@ -216,24 +212,25 @@ const TankFeeding = () => {
       toast({ title: "Invalid price", description: "Price per unit cannot be negative." });
       return;
     }
-    const list = loadStocks(locationId);
-    const idx = list.findIndex(s => s.name.toLowerCase() === name.toLowerCase() && s.category === "feed" && s.unit === newStockUnit);
     const amount = newStockQty * newStockPpu;
     const now = new Date().toISOString();
-    if (idx >= 0) {
-      const s = list[idx];
-      list[idx] = { ...s, quantity: s.quantity + newStockQty, totalAmount: s.totalAmount + amount, pricePerUnit: newStockPpu, updatedAt: now };
-    } else {
-      list.unshift({ id: crypto.randomUUID(), name, category: "feed", unit: newStockUnit, quantity: newStockQty, pricePerUnit: newStockPpu, totalAmount: amount, minStock: 0, createdAt: now, updatedAt: now });
-    }
-    saveStocks(locationId, list);
-    setStocks(list);
-    // select created/updated item
-    const sel = idx >= 0 ? list[idx].id : list[0].id;
-    setSelectedStockId(sel);
+
+    enqueueChange("stocks/upsert", {
+      locationId,
+      name,
+      category: "feed",
+      unit: newStockUnit,
+      quantity: newStockQty,
+      pricePerUnit: newStockPpu,
+      minStock: 0,
+      expiryISO: undefined,
+      notes: undefined,
+      nowISO: now,
+    }, `Stock: ${name} +${newStockQty} ${newStockUnit}`);
+
     setAddOpen(false);
     setNewStockName(""); setNewStockQty(0); setNewStockUnit("kg"); setNewStockPpu(0);
-    toast({ title: "Stock added", description: `${name} updated.` });
+    toast({ title: "Submitted for approval", description: `${name} — ${newStockQty} ${newStockUnit}` });
   };
 
   return (

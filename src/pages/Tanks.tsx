@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useSelection } from "@/state/SelectionContext";
 import { cropDayFromStartIST, nowIST } from "@/lib/time";
 import { useToast } from "@/hooks/use-toast";
+import { enqueueChange } from "@/lib/approvals";
 
 interface Tank { id: string; locationId: string; name: string; type: "shrimp" | "fish" }
 
@@ -117,21 +118,18 @@ const Tanks = () => {
   const onCreateTank = () => {
     if (!locationId || !isValid) return;
     const newTank: Tank = { id: crypto.randomUUID(), locationId, name: formName.trim(), type: formType };
-    const next = [newTank, ...tanksAll];
-    setTanksAll(next);
-    saveTanks(next);
+    enqueueChange("tanks/create", { tank: newTank }, `Tank: ${newTank.name}`);
     setOpen(false);
     setFormName("");
     setFormType("fish");
+    toast({ title: "Submitted for approval", description: `${newTank.name}` });
   };
 
   const onStartCrop = (t: Tank) => {
     const now = nowIST();
-    const existing = loadDetail(t.id) || {};
-    const detail: TankDetail = { ...existing, seedDate: now.toISOString(), cropEnd: undefined };
-    saveDetail(t.id, detail);
+    enqueueChange("tanks/start_crop", { tankId: t.id, iso: now.toISOString() }, `Start crop — ${t.name}`);
     setRev((r) => r + 1);
-    toast({ title: "Crop started", description: `${t.name}: Day 1 started.` });
+    toast({ title: "Submitted for approval", description: `${t.name}: start crop` });
   };
 
   const onEndCrop = (t: Tank) => {
@@ -141,10 +139,9 @@ const Tanks = () => {
       return;
     }
     const now = new Date();
-    pushRecycleBin({ ...existing, cropEnd: now.toISOString(), tankId: t.id });
-    clearDetail(t.id);
+    enqueueChange("tanks/end_crop", { tankId: t.id, iso: now.toISOString() }, `End crop — ${t.name}`);
     setRev((r) => r + 1);
-    toast({ title: "Crop ended", description: `${t.name}: Moved to Recycle Bin.` });
+    toast({ title: "Submitted for approval", description: `${t.name}: end crop` });
   };
 
   return (

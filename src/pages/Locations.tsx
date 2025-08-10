@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Pencil, Trash2, ListTree } from "lucide-react";
 import { useSelection } from "@/state/SelectionContext";
+import { enqueueChange } from "@/lib/approvals";
 
 interface Location {
   id: string;
@@ -65,14 +66,10 @@ const Locations = () => {
   const onSubmit = () => {
     if (!isValid) return;
     if (editing) {
-      const next = locations.map((l) => (l.id === editing.id ? { ...editing, ...form } : l));
-      setLocations(next);
-      saveLocations(next);
+      enqueueChange("locations/update", { id: editing.id, updates: { name: form.name.trim(), address: form.address?.trim() } }, `Update Location: ${editing.name}`);
     } else {
       const newLoc: Location = { id: crypto.randomUUID(), name: form.name.trim(), address: form.address?.trim() };
-      const next = [newLoc, ...locations];
-      setLocations(next);
-      saveLocations(next);
+      enqueueChange("locations/create", { location: newLoc }, `Create Location: ${newLoc.name}`);
     }
     setOpen(false);
     resetForm();
@@ -85,9 +82,7 @@ const Locations = () => {
   };
 
   const onDelete = (id: string) => {
-    const next = locations.filter((l) => l.id !== id);
-    setLocations(next);
-    saveLocations(next);
+    enqueueChange("locations/delete", { id }, `Delete Location`);
   };
 
   const openTanks = (loc: Location) => {

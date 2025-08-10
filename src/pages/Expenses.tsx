@@ -11,6 +11,7 @@ import { useSelection } from "@/state/SelectionContext";
 import { useAuth } from "@/state/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { enqueueChange } from "@/lib/approvals";
 
 // Local types reused across modules
 interface StockRecord {
@@ -303,12 +304,11 @@ const Expenses = () => {
       notes: notes || undefined,
       createdAt: new Date().toISOString(),
     };
-    const list = loadExpenses(location.id, tank.id);
-    list.unshift(entry);
-    saveExpenses(location.id, tank.id, list);
-    setEntries(list);
+
+    enqueueChange("expenses/add", { locationId: location.id, tankId: tank.id, entry }, `Expense: ${name} — ₹ ${entry.amount}`);
+
     setAmount(0); setNotes(""); setCustomName(""); setCategory("manpower"); setDateStr(todayKey);
-    toast({ title: "Expense added", description: `${name} — ${fmt(entry.amount)}` });
+    toast({ title: "Submitted for approval", description: `${name} — ₹ ${entry.amount.toFixed(2)}` });
     setRev(r => r + 1);
   };
 
