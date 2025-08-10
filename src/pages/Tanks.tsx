@@ -50,6 +50,7 @@ const Tanks = () => {
 
   const handleSelectTank = (t: Tank) => {
     setTank({ id: t.id, name: t.name, type: t.type });
+    navigate(`/locations/${t.locationId}/tanks/${t.id}`);
   };
 
   return (
