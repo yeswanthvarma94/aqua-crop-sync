@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useSelection } from "@/state/SelectionContext";
-import { cropDayFromStartIST } from "@/lib/time";
+import { cropDayFromStartIST, nowIST } from "@/lib/time";
+import { useToast } from "@/hooks/use-toast";
 
 interface Tank { id: string; locationId: string; name: string; type: "shrimp" | "fish" }
 
@@ -28,6 +29,25 @@ const loadDetail = (tankId: string): TankDetail | null => {
     return raw ? (JSON.parse(raw) as TankDetail) : null;
   } catch {
     return null;
+  }
+};
+
+const saveDetail = (tankId: string, detail: TankDetail) => {
+  localStorage.setItem(`tankDetail:${tankId}`, JSON.stringify(detail));
+};
+
+const clearDetail = (tankId: string) => {
+  localStorage.removeItem(`tankDetail:${tankId}`);
+};
+
+const pushRecycleBin = (endedDetail: TankDetail & { tankId: string }) => {
+  try {
+    const raw = localStorage.getItem("recycleBin.crops");
+    const arr = raw ? (JSON.parse(raw) as any[]) : [];
+    arr.unshift(endedDetail);
+    localStorage.setItem("recycleBin.crops", JSON.stringify(arr));
+  } catch {
+    // no-op
   }
 };
 
@@ -68,6 +88,8 @@ const Tanks = () => {
   const [formName, setFormName] = useState("");
   const [formType, setFormType] = useState<"shrimp" | "fish">("fish");
   const [tanksAll, setTanksAll] = useState<Tank[]>(() => loadTanks());
+  const { toast } = useToast();
+  const [rev, setRev] = useState(0);
   useSEO("Tanks | AquaLedger", "Manage tanks for the selected location. Add, view, and open details.");
 
   // Ensure selection context includes this location id
@@ -84,7 +106,7 @@ const Tanks = () => {
     const list = tanksAll.filter((t) => t.locationId === locationId);
     list.forEach((t) => map.set(t.id, loadDetail(t.id)));
     return map;
-  }, [tanksAll, locationId]);
+  }, [tanksAll, locationId, rev]);
 
   const handleSelectTank = (t: Tank) => {
     setTank({ id: t.id, name: t.name, type: t.type });
@@ -101,6 +123,28 @@ const Tanks = () => {
     setOpen(false);
     setFormName("");
     setFormType("fish");
+  };
+
+  const onStartCrop = (t: Tank) => {
+    const now = nowIST();
+    const existing = loadDetail(t.id) || {};
+    const detail: TankDetail = { ...existing, seedDate: now.toISOString(), cropEnd: undefined };
+    saveDetail(t.id, detail);
+    setRev((r) => r + 1);
+    toast({ title: "Crop started", description: `${t.name}: Day 1 started.` });
+  };
+
+  const onEndCrop = (t: Tank) => {
+    const existing = loadDetail(t.id);
+    if (!existing || !existing.seedDate) {
+      toast({ title: "No active crop", description: `${t.name}: Start a crop first.` });
+      return;
+    }
+    const now = new Date();
+    pushRecycleBin({ ...existing, cropEnd: now.toISOString(), tankId: t.id });
+    clearDetail(t.id);
+    setRev((r) => r + 1);
+    toast({ title: "Crop ended", description: `${t.name}: Moved to Recycle Bin.` });
   };
 
   return (
@@ -160,12 +204,13 @@ const Tanks = () => {
                 <TableHead>Area (acres)</TableHead>
                 <TableHead>Price</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {tanks.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground">No tanks found for this location.</TableCell>
+                  <TableCell colSpan={9} className="text-center text-muted-foreground">No tanks found for this location.</TableCell>
                 </TableRow>
               ) : (
                 tanks.map((t) => {
@@ -180,6 +225,13 @@ const Tanks = () => {
                       <TableCell>{d?.areaAcres ?? "—"}</TableCell>
                       <TableCell>{d?.price ?? "—"}</TableCell>
                       <TableCell>{d?.seedDate && !d?.cropEnd ? `Day ${cropDayFromStartIST(new Date(d.seedDate))}` : d?.cropEnd ? `Ended` : "—"}</TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        {d?.seedDate && !d?.cropEnd ? (
+                          <Button variant="destructive" size="sm" onClick={() => onEndCrop(t)}>End Crop</Button>
+                        ) : (
+                          <Button variant="outline" size="sm" onClick={() => onStartCrop(t)}>Start Crop</Button>
+                        )}
+                      </TableCell>
                     </TableRow>
                   );
                 })
