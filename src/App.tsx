@@ -17,7 +17,6 @@ import TankDetail from "./pages/TankDetail";
 import Stocks from "./pages/Stocks";
 import TankFeeding from "./pages/TankFeeding";
 import Reports from "./pages/Reports";
-import Approvals from "./pages/Approvals";
 import Auth from "./pages/Auth";
 import SignUp from "./pages/SignUp";
 const queryClient = new QueryClient();
@@ -56,7 +55,7 @@ const App = () => (
               <Route path="/locations/:locationId/tanks/:tankId/feeding" element={<ProtectedRoute><TankFeeding /></ProtectedRoute>} />
               <Route path="/locations/:locationId/stocks" element={<ProtectedRoute><Stocks /></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
-              <Route path="/approvals" element={<ProtectedRoute><Approvals /></ProtectedRoute>} />
+              
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<ProtectedRoute><NotFound /></ProtectedRoute>} />
             </Routes>

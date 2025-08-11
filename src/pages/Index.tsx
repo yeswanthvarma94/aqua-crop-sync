@@ -1,16 +1,9 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import HeaderPickers from "@/components/HeaderPickers";
 import SyncBadge from "@/components/SyncBadge";
 import QuickActionsGrid from "@/components/QuickActionsGrid";
 import TabBar from "@/components/TabBar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { useAuth } from "@/state/AuthContext";
 import { formatIST, nowIST } from "@/lib/time";
-import { supabase } from "@/integrations/supabase/client";
-import { AlertCircle } from "lucide-react";
 
 const Index = () => {
   const { user, accountId, hasRole } = useAuth();

@@ -258,54 +258,19 @@ export const enqueueChange = async <T = any>(type: ChangeType, payload: T, descr
     console.warn("enqueueChange: no active account");
     return null;
   }
-  const { data: userRes } = await supabase.auth.getUser();
-  const userId = (userRes as any).user?.id ?? null;
-
-  // If current user is the owner of the active account, apply immediately
   try {
-    const { data: isOwner } = await supabase.rpc("current_user_is_account_owner", { aid: accountId });
-    if (isOwner === true) {
-      await applyImmediateChange(type, payload, accountId);
-      return {
-        id: crypto.randomUUID(),
-        type,
-        description,
-        payload,
-        createdAt: new Date().toISOString(),
-        status: "approved",
-        createdBy: userId,
-      } as any;
-    }
+    await applyImmediateChange(type, payload, accountId);
+    return {
+      id: crypto.randomUUID(),
+      type,
+      description,
+      payload,
+      createdAt: new Date().toISOString(),
+      status: "approved",
+      createdBy: null,
+    } as any;
   } catch (e) {
-    console.warn("Owner check failed, falling back to queue:", e);
-  }
-
-  const toInsert = {
-    account_id: accountId,
-    type,
-    payload,
-    status: "pending",
-    created_by: userId,
-  };
-
-  const { data, error } = await supabase
-    .from("pending_changes")
-    .insert([toInsert])
-    .select("id, created_at")
-    .single();
-
-  if (error || !data) {
-    console.error("enqueueChange:", error);
+    console.error("enqueueChange immediate apply failed:", e);
     return null;
   }
-
-  return {
-    id: (data as any).id,
-    type,
-    description,
-    payload,
-    createdAt: (data as any).created_at,
-    status: "pending",
-    createdBy: userId,
-  };
 };
