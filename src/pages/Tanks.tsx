@@ -52,13 +52,25 @@ const Tanks = () => {
 
   useSEO("Tanks | AquaLedger", "Manage tanks for the selected location. Add, view, and open details.");
 
-  // Ensure selection context includes this location id
+  // Ensure selection context includes actual location name from DB
   useEffect(() => {
-    if (!location && locationId) {
-      // Best-effort set with id; name will resolve later when DB is wired
-      setLocation({ id: locationId, name: locationId });
-    }
-  }, [location, locationId, setLocation]);
+    let ignore = false;
+    const loadLocation = async () => {
+      if (!locationId) return;
+      // If already set correctly, skip
+      if (location?.id === locationId && location?.name && location.name !== locationId) return;
+      const { data } = await supabase
+        .from("locations")
+        .select("id,name")
+        .eq("id", locationId)
+        .maybeSingle();
+      if (!ignore && data) {
+        setLocation({ id: (data as any).id, name: (data as any).name });
+      }
+    };
+    loadLocation();
+    return () => { ignore = true; };
+  }, [locationId, setLocation, location?.id, location?.name]);
 
   const loadTanks = async () => {
     if (!locationId) return;
