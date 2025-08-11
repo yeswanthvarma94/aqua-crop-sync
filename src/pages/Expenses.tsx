@@ -182,14 +182,20 @@ const saveExpense = async (accountId: string, locationId: string, tankId: string
   }
 };
 
-// Utility to scan feeding entries across crop
-const listFeedingAcrossCrop = async (accountId: string, locationId: string, tankId: string, startISO?: string, endISO?: string): Promise<FeedingEntry[]> => {
+// Enhanced FeedingEntry with price information
+interface FeedingEntryWithPrice extends FeedingEntry {
+  stockId: string;
+  pricePerUnit: number;
+}
+
+// Utility to scan feeding entries across crop with price information
+const listFeedingAcrossCrop = async (accountId: string, locationId: string, tankId: string, startISO?: string, endISO?: string): Promise<FeedingEntryWithPrice[]> => {
   try {
     let query = supabase
       .from('feeding_logs')
       .select(`
         *,
-        stocks!inner(name, unit)
+        stocks!inner(name, unit, price_per_unit)
       `)
       .eq('account_id', accountId)
       .eq('location_id', locationId)
@@ -213,6 +219,8 @@ const listFeedingAcrossCrop = async (accountId: string, locationId: string, tank
       quantity: Number(log.quantity),
       time: new Date(log.fed_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
       createdAt: log.created_at,
+      stockId: log.stock_id,
+      pricePerUnit: Number(log.stocks.price_per_unit || 0),
     }));
   } catch (error) {
     console.error('Error loading feeding entries:', error);
@@ -309,7 +317,7 @@ const Expenses = () => {
   const [stocks, setStocks] = useState<StockRecord[]>([]);
   const [entries, setEntries] = useState<ExpenseEntry[]>([]);
   const [detail, setDetail] = useState<TankDetail | null>(null);
-  const [feedEntries, setFeedEntries] = useState<FeedingEntry[]>([]);
+  const [feedEntries, setFeedEntries] = useState<FeedingEntryWithPrice[]>([]);
   const [materialsEntries, setMaterialsEntries] = useState<MaterialLogEntry[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -368,13 +376,11 @@ const Expenses = () => {
   // Derived expenses
   const seedCostFromDetail = detail?.price ?? 0;
 
-  const priceByStockName = useMemo(() => {
-    const map = new Map<string, number>();
-    stocks.filter(s => s.category === "feed").forEach(s => map.set(s.name, s.pricePerUnit || 0));
-    return map;
-  }, [stocks]);
-
-  const feedCost = useMemo(() => feedEntries.reduce((sum, e) => sum + (e.quantity * (priceByStockName.get(e.stockName) ?? 0)), 0), [feedEntries, priceByStockName]);
+  // Calculate feed cost directly from feeding entries with stock prices
+  const feedCost = useMemo(() => 
+    feedEntries.reduce((sum, entry) => sum + (entry.quantity * entry.pricePerUnit), 0), 
+    [feedEntries]
+  );
 
   const priceByStockId = useMemo(() => {
     const map = new Map<string, number>();
