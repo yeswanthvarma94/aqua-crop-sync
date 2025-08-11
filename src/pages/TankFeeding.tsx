@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cropDayFromStartIST } from "@/lib/time";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { enqueueChange } from "@/lib/approvals";
+
 
 interface Tank { id: string; locationId: string; name: string; type: "shrimp" | "fish" }
 interface TankDetail { seedDate?: string; cropEnd?: string; name: string; type: "shrimp" | "fish" }
@@ -171,7 +171,7 @@ const TankFeeding = () => {
       return;
     }
 
-    const entry: FeedingEntry = {
+  const entry: FeedingEntry = {
       schedule,
       stockName: selectedStock.name,
       unit: selectedStock.unit,
@@ -181,20 +181,24 @@ const TankFeeding = () => {
       createdAt: new Date().toISOString(),
     };
 
-    enqueueChange("feeding/log", {
-      locationId,
-      tankId,
-      dateKey: todayKey,
-      entry,
-      stockId: selectedStock.id,
-      quantity,
-    }, `Feeding S${entry.schedule}: ${entry.quantity} ${entry.unit} — ${entry.stockName}`);
+    const list = loadFeeding(locationId, tankId, todayKey);
+    list.push(entry);
+    saveFeeding(locationId, tankId, todayKey, list);
+
+    // Deduct from local stock list
+    const items = loadStocks(locationId);
+    const idx = items.findIndex((s) => s.id === selectedStock.id);
+    if (idx >= 0) {
+      const nextQty = Math.max(0, Number(items[idx].quantity || 0) - Number(quantity));
+      items[idx] = { ...items[idx], quantity: nextQty };
+      saveStocks(locationId, items);
+    }
 
     setSchedule("");
     setQuantity(0);
     setNotes("");
-    setRev(r => r + 1);
-    toast({ title: "Submitted for approval", description: `Schedule ${entry.schedule}` });
+    setRev((r) => r + 1);
+    toast({ title: "Saved", description: `Schedule ${entry.schedule}` });
   };
 
   const addStock = () => {
@@ -215,22 +219,37 @@ const TankFeeding = () => {
     const amount = newStockQty * newStockPpu;
     const now = new Date().toISOString();
 
-    enqueueChange("stocks/upsert", {
-      locationId,
-      name,
-      category: "feed",
-      unit: newStockUnit,
-      quantity: newStockQty,
-      pricePerUnit: newStockPpu,
-      minStock: 0,
-      expiryISO: undefined,
-      notes: undefined,
-      nowISO: now,
-    }, `Stock: ${name} +${newStockQty} ${newStockUnit}`);
+    // Upsert feed stock locally
+    const items = loadStocks(locationId);
+    const idx = items.findIndex((s) => s.name === name && s.category === "feed" && s.unit === newStockUnit);
+    const amountDelta = newStockQty * newStockPpu;
+    if (idx >= 0) {
+      const s = items[idx];
+      items[idx] = {
+        ...s,
+        quantity: Number(s.quantity || 0) + Number(newStockQty),
+        pricePerUnit: newStockPpu,
+        totalAmount: Number(s.totalAmount || 0) + amountDelta,
+      };
+    } else {
+      items.unshift({
+        id: crypto.randomUUID(),
+        name,
+        category: "feed",
+        unit: newStockUnit,
+        quantity: newStockQty,
+        pricePerUnit: newStockPpu,
+        totalAmount: amountDelta,
+        minStock: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      } as any);
+    }
+    saveStocks(locationId, items);
 
     setAddOpen(false);
     setNewStockName(""); setNewStockQty(0); setNewStockUnit("kg"); setNewStockPpu(0);
-    toast({ title: "Submitted for approval", description: `${name} — ${newStockQty} ${newStockUnit}` });
+    toast({ title: "Saved", description: `${name} — ${newStockQty} ${newStockUnit}` });
   };
 
   return (
