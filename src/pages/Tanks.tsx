@@ -59,11 +59,12 @@ const Tanks = () => {
       if (!locationId) return;
       // If already set correctly, skip
       if (location?.id === locationId && location?.name && location.name !== locationId) return;
-      const { data } = await supabase
-        .from("locations")
-        .select("id,name")
-        .eq("id", locationId)
-        .maybeSingle();
+        const { data } = await supabase
+          .from("locations")
+          .select("id,name")
+          .eq("account_id", accountId)
+          .eq("id", locationId)
+          .maybeSingle();
       if (!ignore && data) {
         setLocation({ id: (data as any).id, name: (data as any).name });
       }
@@ -73,10 +74,11 @@ const Tanks = () => {
   }, [locationId, setLocation, location?.id, location?.name]);
 
   const loadTanks = async () => {
-    if (!locationId) return;
+    if (!accountId || !locationId) return;
     const { data, error } = await supabase
       .from("tanks")
       .select("id, name, type, location_id")
+      .eq("account_id", accountId)
       .eq("location_id", locationId)
       .order("created_at", { ascending: false });
     if (!error) {
@@ -92,11 +94,12 @@ const Tanks = () => {
 
   const [activeCrops, setActiveCrops] = useState<Record<string, TankDetail>>({});
   const loadActiveCrops = async (tankIds: string[]) => {
-    if (tankIds.length === 0) { setActiveCrops({}); return; }
+    if (tankIds.length === 0 || !accountId) { setActiveCrops({}); return; }
     const { data } = await supabase
       .from("tank_crops")
       .select("tank_id, seed_date, end_date")
       .in("tank_id", tankIds)
+      .eq("account_id", accountId)
       .is("end_date", null);
     const map: Record<string, TankDetail> = {};
     (data || []).forEach((row: any) => {
@@ -159,6 +162,7 @@ const Tanks = () => {
         .from("tank_crops")
         .update({ end_date: endDate })
         .eq("tank_id", t.id)
+        .eq("account_id", accountId)
         .is("end_date", null);
       if (error) throw error;
       setRev((r) => r + 1);

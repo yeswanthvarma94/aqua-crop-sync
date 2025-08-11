@@ -81,10 +81,11 @@ const Stocks = () => {
   }, [location, locationId, setLocation]);
 
   const load = async () => {
-    if (!locationId) return;
+    if (!locationId || !accountId) return;
     const { data, error } = await supabase
       .from("stocks")
       .select("id, name, category, unit, quantity, price_per_unit, min_stock, expiry_date, notes, created_at, created_at")
+      .eq("account_id", accountId)
       .eq("location_id", locationId)
       .order("created_at", { ascending: false });
     if (!error) {

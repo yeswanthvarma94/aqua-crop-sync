@@ -84,7 +84,8 @@ const Locations = () => {
             name: form.name.trim(),
             address: form.address?.trim() || null,
           })
-          .eq("id", editing.id);
+          .eq("id", editing.id)
+          .eq("account_id", accountId);
         if (error) throw error;
         toast({ title: "Updated" });
       } else {
@@ -118,7 +119,7 @@ const Locations = () => {
 
   const onDelete = async (id: string) => {
     try {
-      const { error } = await supabase.from("locations").delete().eq("id", id);
+      const { error } = await supabase.from("locations").delete().eq("id", id).eq("account_id", accountId);
       if (error) throw error;
       toast({ title: "Deleted" });
       await load();
