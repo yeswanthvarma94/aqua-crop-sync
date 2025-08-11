@@ -64,10 +64,11 @@ const loadActiveCropFromDB = async (tankId: string) => {
   return data ? { seedDate: data.seed_date, cropEnd: data.end_date || undefined } : null;
 };
 
-const loadStocksFromDB = async (locationId: string): Promise<StockRecord[]> => {
+const loadStocksFromDB = async (accountId: string, locationId: string): Promise<StockRecord[]> => {
   const { data } = await supabase
     .from("stocks")
     .select("*")
+    .eq("account_id", accountId)
     .eq("location_id", locationId)
     .eq("category", "feed");
   return (data || []).map((s: any) => ({
@@ -142,13 +143,13 @@ const TankFeeding = () => {
 
   useEffect(() => {
     const loadData = async () => {
-      if (locationId) {
-        const stockData = await loadStocksFromDB(locationId);
+      if (accountId && locationId) {
+        const stockData = await loadStocksFromDB(accountId, locationId);
         setStocks(stockData);
       }
     };
     loadData();
-  }, [locationId, rev]);
+  }, [accountId, locationId, rev]);
 
   // Load feeding entries from Supabase
   useEffect(() => {
@@ -164,6 +165,8 @@ const TankFeeding = () => {
         const { data, error } = await supabase
           .from("feeding_logs")
           .select("schedule, quantity, fed_at, notes, stock_id")
+          .eq("account_id", accountId as string)
+          .eq("location_id", locationId)
           .eq("tank_id", tankId)
           .gte("fed_at", startOfDay.toISOString())
           .lte("fed_at", endOfDay.toISOString())
@@ -193,7 +196,7 @@ const TankFeeding = () => {
 
     loadFeedingEntries();
     // Refresh when stocks change to resolve names/units for loaded entries
-  }, [locationId, tankId, todayKey, rev, stocks]);
+  }, [accountId, locationId, tankId, todayKey, rev, stocks]);
 
   const completed = useMemo(() => new Set(entries.map(e => e.schedule)), [entries]);
   const remainingStock = selectedStock?.quantity ?? 0;
@@ -307,6 +310,7 @@ const TankFeeding = () => {
       const { data: existingStock } = await supabase
         .from("stocks")
         .select("*")
+        .eq("account_id", accountId)
         .eq("location_id", locationId)
         .eq("name", name)
         .eq("category", "feed")
