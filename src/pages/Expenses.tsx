@@ -49,7 +49,7 @@ interface FeedingEntry {
 }
 
 // Expenses model
-type ExpenseCategory = "lease" | "seed" | "manpower" | "salaries" | "electricity" | "diesel" | "generator" | "medicine" | "other";
+type ExpenseCategory = "lease" | "seed" | "manpower" | "salaries" | "electricity" | "diesel" | "generator" | "medicine" | "feed" | "other";
 interface ExpenseEntry {
   id: string;
   category: ExpenseCategory;
@@ -285,6 +285,7 @@ const categoryLabel: Record<ExpenseCategory, string> = {
   diesel: "Diesel",
   generator: "Generator",
   medicine: "Medicines",
+  feed: "Feed",
   other: "Other",
 };
 

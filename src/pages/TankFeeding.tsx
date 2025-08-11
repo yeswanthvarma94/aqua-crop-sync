@@ -161,29 +161,28 @@ const TankFeeding = () => {
         const endOfDay = new Date();
         endOfDay.setHours(23, 59, 59, 999);
 
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from("feeding_logs")
-          .select(`
-            schedule,
-            quantity,
-            fed_at,
-            notes,
-            stocks!inner(name, unit)
-          `)
+          .select("schedule, quantity, fed_at, notes, stock_id")
           .eq("tank_id", tankId)
           .gte("fed_at", startOfDay.toISOString())
           .lte("fed_at", endOfDay.toISOString())
           .order("fed_at", { ascending: true });
 
-        const feedingEntries: FeedingEntry[] = (data || []).map((entry: any) => ({
-          schedule: entry.schedule || "",
-          stockName: entry.stocks.name,
-          unit: entry.stocks.unit,
-          quantity: Number(entry.quantity),
-          time: format(new Date(entry.fed_at), "HH:mm"),
-          notes: entry.notes || undefined,
-          createdAt: entry.fed_at,
-        }));
+        if (error) throw error;
+
+        const feedingEntries: FeedingEntry[] = (data || []).map((entry: any) => {
+          const stock = stocks.find(s => s.id === entry.stock_id);
+          return {
+            schedule: entry.schedule || "",
+            stockName: stock?.name || "Feed",
+            unit: (stock?.unit as StockRecord["unit"]) || "kg",
+            quantity: Number(entry.quantity),
+            time: format(new Date(entry.fed_at), "HH:mm"),
+            notes: entry.notes || undefined,
+            createdAt: entry.fed_at,
+          };
+        });
 
         setEntries(feedingEntries);
       } catch (error) {
@@ -193,7 +192,8 @@ const TankFeeding = () => {
     };
 
     loadFeedingEntries();
-  }, [locationId, tankId, todayKey, rev]);
+    // Refresh when stocks change to resolve names/units for loaded entries
+  }, [locationId, tankId, todayKey, rev, stocks]);
 
   const completed = useMemo(() => new Set(entries.map(e => e.schedule)), [entries]);
   const remainingStock = selectedStock?.quantity ?? 0;
@@ -256,9 +256,24 @@ const TankFeeding = () => {
         .update({ quantity: nextQty })
         .eq("id", selectedStock.id);
 
-      if (stockError) {
-        throw stockError;
-      }
+      // Create an expense row for consumed feed
+      const feedAmount = quantity * (selectedStock.pricePerUnit || 0);
+      const incurredDate = feedingTime.toISOString().slice(0, 10);
+      const { error: expenseError } = await supabase
+        .from("expenses")
+        .insert({
+          account_id: accountId,
+          location_id: locationId,
+          tank_id: tankId,
+          category: "feed",
+          name: `${selectedStock.name} feed`,
+          description: `Auto-added for feeding schedule ${schedule}`,
+          amount: feedAmount,
+          incurred_at: incurredDate,
+          notes: notes || null,
+        });
+
+      if (expenseError) throw expenseError;
 
       setSchedule("");
       setQuantity(0);
