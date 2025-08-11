@@ -34,8 +34,15 @@ const loadActiveCropDB = async (tankId: string): Promise<TankDetail | null> => {
 
 const Feeding = () => {
   const navigate = useNavigate();
-  const { location } = useSelection();
+  const { location, tank } = useSelection();
   const { toast } = useToast();
+
+  // If a tank is already selected in the header, jump straight to today's feeding for that tank
+  useEffect(() => {
+    if (location?.id && tank?.id) {
+      navigate(`/locations/${location.id}/tanks/${tank.id}/feeding`, { replace: true });
+    }
+  }, [location?.id, tank?.id, navigate]);
 
   const [tanksAll, setTanksAll] = useState<Tank[]>([]);
   const [activeMap, setActiveMap] = useState<Record<string, TankDetail | null>>({});
