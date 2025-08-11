@@ -118,7 +118,8 @@ const Locations = () => {
       }
       setOpen(false);
       resetForm();
-      loadPendingChanges();
+      await load();
+      await loadPendingChanges();
     } catch (error) {
       toast({
         title: "Error",
@@ -143,7 +144,8 @@ const Locations = () => {
           ? "Location deleted successfully."
           : "Location deletion has been sent for approval. An owner will review it soon.",
       });
-      loadPendingChanges();
+      await load();
+      await loadPendingChanges();
     } catch (error) {
       toast({
         title: "Error",
