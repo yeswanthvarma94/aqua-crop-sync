@@ -420,13 +420,18 @@ const Expenses = () => {
     return agg;
   }, [entriesInRange]);
 
-  const otherTotal = useMemo(() => entriesInRange.reduce((sum, e) => sum + e.amount, 0), [entriesInRange]);
   const seedCost = (totalsByCat["seed"] ?? 0) || seedCostFromDetail;
   const leaseTotal = totalsByCat["lease"] ?? 0;
+  const generatorTotal = totalsByCat["generator"] ?? 0;
+  const manpowerTotal = totalsByCat["manpower"] ?? 0;
+  const salariesTotal = totalsByCat["salaries"] ?? 0;
+  const electricityTotal = totalsByCat["electricity"] ?? 0;
+  const dieselTotal = totalsByCat["diesel"] ?? 0;
+  const otherExpensesTotal = totalsByCat["other"] ?? 0;
 
   const grandTotal = useMemo(
-    () => seedCost + leaseTotal + feedCost + otherTotal + materialsMedicineCost + materialsOtherCost,
-    [seedCost, leaseTotal, feedCost, otherTotal, materialsMedicineCost, materialsOtherCost]
+    () => seedCost + leaseTotal + feedCost + materialsMedicineCost + materialsOtherCost + generatorTotal + manpowerTotal + salariesTotal + electricityTotal + dieselTotal + otherExpensesTotal,
+    [seedCost, leaseTotal, feedCost, materialsMedicineCost, materialsOtherCost, generatorTotal, manpowerTotal, salariesTotal, electricityTotal, dieselTotal, otherExpensesTotal]
   );
 
   const isManager = hasRole(["manager"]);
@@ -588,12 +593,15 @@ const Expenses = () => {
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center justify-between"><span>Lease</span><span>{fmt(leaseTotal)}</span></div>
                   <div className="flex items-center justify-between"><span>Seed cost</span><span>{fmt(seedCost)}</span></div>
+                  <div className="flex items-center justify-between"><span>Feed cost</span><span>{fmt(feedCost)}</span></div>
                   <div className="flex items-center justify-between"><span>Medicines (materials)</span><span>{fmt(materialsMedicineCost)}</span></div>
                   <div className="flex items-center justify-between"><span>Other materials</span><span>{fmt(materialsOtherCost)}</span></div>
-                  <div className="flex items-center justify-between"><span>Feed cost</span><span>{fmt(feedCost)}</span></div>
-                  {Object.entries(totalsByName).filter(([k]) => k !== "Lease" && k !== "Seed").map(([k, v]) => (
-                    <div key={k} className="flex items-center justify-between"><span>{k}</span><span>{fmt(v)}</span></div>
-                  ))}
+                  <div className="flex items-center justify-between"><span>Generator</span><span>{fmt(generatorTotal)}</span></div>
+                  <div className="flex items-center justify-between"><span>Man power</span><span>{fmt(manpowerTotal)}</span></div>
+                  <div className="flex items-center justify-between"><span>Electricity</span><span>{fmt(electricityTotal)}</span></div>
+                  <div className="flex items-center justify-between"><span>Diesel</span><span>{fmt(dieselTotal)}</span></div>
+                  <div className="flex items-center justify-between"><span>Salaries</span><span>{fmt(salariesTotal)}</span></div>
+                  <div className="flex items-center justify-between"><span>Other expenses</span><span>{fmt(otherExpensesTotal)}</span></div>
                   <div className="border-t pt-2 flex items-center justify-between font-semibold text-foreground"><span>Grand Total</span><span>{fmt(grandTotal)}</span></div>
                 </div>
               </CardContent>
