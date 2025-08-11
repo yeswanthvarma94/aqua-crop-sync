@@ -11,6 +11,7 @@ import { useSelection } from "@/state/SelectionContext";
 import { useAuth } from "@/state/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { supabase } from "@/integrations/supabase/client";
 
 
 // Local types reused across modules
@@ -60,62 +61,163 @@ interface ExpenseEntry {
   createdAt: string; // ISO
 }
 
-// Storage helpers
-const stockKey = (locationId: string) => `stocks:${locationId}`;
-const loadStocks = (locationId: string): StockRecord[] => {
+// Database helpers
+const loadStocks = async (accountId: string, locationId: string): Promise<StockRecord[]> => {
   try {
-    const raw = localStorage.getItem(stockKey(locationId));
-    return raw ? (JSON.parse(raw) as StockRecord[]) : [];
-  } catch {
+    const { data, error } = await supabase
+      .from('stocks')
+      .select('*')
+      .eq('account_id', accountId)
+      .eq('location_id', locationId);
+    
+    if (error) throw error;
+    
+    return (data || []).map(stock => ({
+      id: stock.id,
+      name: stock.name,
+      category: stock.category as StockRecord["category"],
+      unit: stock.unit as StockRecord["unit"],
+      quantity: Number(stock.quantity),
+      pricePerUnit: Number(stock.price_per_unit || 0),
+      totalAmount: Number(stock.total_amount || 0),
+      minStock: Number(stock.min_stock || 0),
+      expiryDate: stock.expiry_date || undefined,
+      notes: stock.notes || undefined,
+      createdAt: stock.created_at,
+      updatedAt: stock.updated_at,
+    }));
+  } catch (error) {
+    console.error('Error loading stocks:', error);
     return [];
   }
 };
 
-const loadTankDetail = (tankId: string): TankDetail | null => {
+const loadTankDetail = async (accountId: string, tankId: string): Promise<TankDetail | null> => {
   try {
-    const raw = localStorage.getItem(`tankDetail:${tankId}`);
-    return raw ? (JSON.parse(raw) as TankDetail) : null;
-  } catch {
+    // Get tank basic info
+    const { data: tank, error: tankError } = await supabase
+      .from('tanks')
+      .select('*')
+      .eq('account_id', accountId)
+      .eq('id', tankId)
+      .single();
+      
+    if (tankError) throw tankError;
+    
+    // Get active crop info
+    const { data: crop, error: cropError } = await supabase
+      .from('tank_crops')
+      .select('*')
+      .eq('account_id', accountId)
+      .eq('tank_id', tankId)
+      .is('end_date', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+      
+    if (cropError && cropError.code !== 'PGRST116') throw cropError;
+    
+    return {
+      tankId: tank.id,
+      name: tank.name,
+      type: tank.type as "shrimp" | "fish",
+      seedDate: crop?.seed_date || undefined,
+      cropEnd: crop?.end_date || undefined,
+      price: 0, // We'll get this from seed expenses now
+    };
+  } catch (error) {
+    console.error('Error loading tank detail:', error);
     return null;
   }
 };
 
-const expensesKey = (locationId: string, tankId: string) => `expenses:${locationId}:${tankId}`;
-const loadExpenses = (locationId: string, tankId: string): ExpenseEntry[] => {
+const loadExpenses = async (accountId: string, locationId: string, tankId: string): Promise<ExpenseEntry[]> => {
   try {
-    const raw = localStorage.getItem(expensesKey(locationId, tankId));
-    return raw ? (JSON.parse(raw) as ExpenseEntry[]) : [];
-  } catch {
+    const { data, error } = await supabase
+      .from('expenses')
+      .select('*')
+      .eq('account_id', accountId)
+      .eq('location_id', locationId)
+      .eq('tank_id', tankId)
+      .order('incurred_at', { ascending: false });
+    
+    if (error) throw error;
+    
+    return (data || []).map(expense => ({
+      id: expense.id,
+      category: expense.category as ExpenseCategory,
+      name: expense.name || expense.description,
+      amount: Number(expense.amount),
+      date: expense.incurred_at,
+      time: undefined, // Not stored separately in DB
+      notes: expense.notes || undefined,
+      createdAt: expense.created_at,
+    }));
+  } catch (error) {
+    console.error('Error loading expenses:', error);
     return [];
   }
 };
-const saveExpenses = (locationId: string, tankId: string, list: ExpenseEntry[]) => {
-  localStorage.setItem(expensesKey(locationId, tankId), JSON.stringify(list));
+
+const saveExpense = async (accountId: string, locationId: string, tankId: string, entry: Omit<ExpenseEntry, 'id' | 'createdAt'>) => {
+  try {
+    const { error } = await supabase
+      .from('expenses')
+      .insert({
+        account_id: accountId,
+        location_id: locationId,
+        tank_id: tankId,
+        category: entry.category,
+        name: entry.name,
+        description: entry.name,
+        amount: entry.amount,
+        incurred_at: entry.date,
+        notes: entry.notes,
+      });
+    
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error saving expense:', error);
+    throw error;
+  }
 };
 
 // Utility to scan feeding entries across crop
-const listFeedingAcrossCrop = (locationId: string, tankId: string, startISO?: string, endISO?: string): FeedingEntry[] => {
-  const items: FeedingEntry[] = [];
-  const start = startISO ? new Date(startISO).getTime() : undefined;
-  const end = endISO ? new Date(endISO).getTime() : Date.now();
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i)!;
-    const prefix = `feeding:${locationId}:${tankId}:`;
-    if (key && key.startsWith(prefix)) {
-      const dateStr = key.substring(prefix.length); // yyyy-MM-dd
-      const dateTime = new Date(`${dateStr}T00:00:00`).getTime();
-      if (start !== undefined && dateTime < start) continue;
-      if (end !== undefined && dateTime > end) continue;
-      try {
-        const raw = localStorage.getItem(key);
-        if (raw) {
-          const arr = JSON.parse(raw) as FeedingEntry[];
-          items.push(...arr);
-        }
-      } catch {}
+const listFeedingAcrossCrop = async (accountId: string, locationId: string, tankId: string, startISO?: string, endISO?: string): Promise<FeedingEntry[]> => {
+  try {
+    let query = supabase
+      .from('feeding_logs')
+      .select(`
+        *,
+        stocks!inner(name, unit)
+      `)
+      .eq('account_id', accountId)
+      .eq('location_id', locationId)
+      .eq('tank_id', tankId);
+    
+    if (startISO) {
+      query = query.gte('fed_at', startISO);
     }
+    if (endISO) {
+      query = query.lte('fed_at', endISO);
+    }
+    
+    const { data, error } = await query.order('fed_at', { ascending: false });
+    
+    if (error) throw error;
+    
+    return (data || []).map(log => ({
+      schedule: log.schedule || 'morning',
+      stockName: log.stocks.name,
+      unit: log.stocks.unit as StockRecord["unit"],
+      quantity: Number(log.quantity),
+      time: new Date(log.fed_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+      createdAt: log.created_at,
+    }));
+  } catch (error) {
+    console.error('Error loading feeding entries:', error);
+    return [];
   }
-  return items;
 };
 
 // Materials logs
@@ -130,28 +232,43 @@ interface MaterialLogEntry {
   createdAt: string;
 }
 
-const listMaterialsAcrossCrop = (locationId: string, tankId: string, startISO?: string, endISO?: string): MaterialLogEntry[] => {
-  const items: MaterialLogEntry[] = [];
-  const start = startISO ? new Date(startISO).getTime() : undefined;
-  const end = endISO ? new Date(endISO).getTime() : Date.now();
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i)!;
-    const prefix = `materials:logs:${locationId}:${tankId}:`;
-    if (key && key.startsWith(prefix)) {
-      const dateStr = key.substring(prefix.length); // yyyy-MM-dd
-      const dateTime = new Date(`${dateStr}T00:00:00`).getTime();
-      if (start !== undefined && dateTime < start) continue;
-      if (end !== undefined && dateTime > end) continue;
-      try {
-        const raw = localStorage.getItem(key);
-        if (raw) {
-          const arr = JSON.parse(raw) as MaterialLogEntry[];
-          items.push(...arr);
-        }
-      } catch {}
+const listMaterialsAcrossCrop = async (accountId: string, locationId: string, tankId: string, startISO?: string, endISO?: string): Promise<MaterialLogEntry[]> => {
+  try {
+    let query = supabase
+      .from('material_logs')
+      .select(`
+        *,
+        stocks!inner(name, unit, category)
+      `)
+      .eq('account_id', accountId)
+      .eq('location_id', locationId)
+      .eq('tank_id', tankId);
+    
+    if (startISO) {
+      query = query.gte('logged_at', startISO);
     }
+    if (endISO) {
+      query = query.lte('logged_at', endISO);
+    }
+    
+    const { data, error } = await query.order('logged_at', { ascending: false });
+    
+    if (error) throw error;
+    
+    return (data || []).map(log => ({
+      stockId: log.stock_id,
+      stockName: log.stocks.name,
+      category: log.stocks.category as StockRecord["category"],
+      unit: log.stocks.unit as StockRecord["unit"],
+      quantity: Number(log.quantity),
+      time: new Date(log.logged_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+      notes: log.note || undefined,
+      createdAt: log.created_at,
+    }));
+  } catch (error) {
+    console.error('Error loading material logs:', error);
+    return [];
   }
-  return items;
 };
 
 const categoryLabel: Record<ExpenseCategory, string> = {
@@ -183,7 +300,7 @@ const useSEO = (title: string, description: string) => {
 
 const Expenses = () => {
   const { location, tank } = useSelection();
-  const { hasRole } = useAuth();
+  const { hasRole, accountId } = useAuth();
   const { toast } = useToast();
   const todayKey = format(new Date(), "yyyy-MM-dd");
 
@@ -191,7 +308,10 @@ const Expenses = () => {
 
   const [stocks, setStocks] = useState<StockRecord[]>([]);
   const [entries, setEntries] = useState<ExpenseEntry[]>([]);
-  const [rev, setRev] = useState(0);
+  const [detail, setDetail] = useState<TankDetail | null>(null);
+  const [feedEntries, setFeedEntries] = useState<FeedingEntry[]>([]);
+  const [materialsEntries, setMaterialsEntries] = useState<MaterialLogEntry[]>([]);
+  const [loading, setLoading] = useState(false);
 
   // Form state
   const [category, setCategory] = useState<ExpenseCategory>("manpower");
@@ -206,21 +326,47 @@ const Expenses = () => {
   });
   const [notes, setNotes] = useState("");
 
+  // Load data when location/tank changes
   useEffect(() => {
-    if (location?.id) setStocks(loadStocks(location.id));
-  }, [location?.id, rev]);
+    const loadData = async () => {
+      if (!accountId || !location?.id || !tank?.id) return;
+      
+      setLoading(true);
+      try {
+        // Load all data in parallel
+        const [stocksData, expensesData, tankDetail] = await Promise.all([
+          loadStocks(accountId, location.id),
+          loadExpenses(accountId, location.id, tank.id),
+          loadTankDetail(accountId, tank.id)
+        ]);
 
-  useEffect(() => {
-    if (location?.id && tank?.id) setEntries(loadExpenses(location.id, tank.id));
-  }, [location?.id, tank?.id, rev]);
+        setStocks(stocksData);
+        setEntries(expensesData);
+        setDetail(tankDetail);
 
-  const detail = useMemo(() => (tank ? loadTankDetail(tank.id) : null), [tank?.id, rev]);
+        // Load feeding and materials data if we have crop dates
+        if (tankDetail) {
+          const [feedingData, materialsData] = await Promise.all([
+            listFeedingAcrossCrop(accountId, location.id, tank.id, tankDetail.seedDate, tankDetail.cropEnd),
+            listMaterialsAcrossCrop(accountId, location.id, tank.id, tankDetail.seedDate, tankDetail.cropEnd)
+          ]);
+          
+          setFeedEntries(feedingData);
+          setMaterialsEntries(materialsData);
+        }
+      } catch (error) {
+        console.error('Error loading data:', error);
+        toast({ title: "Error", description: "Failed to load data" });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [accountId, location?.id, tank?.id]);
 
   // Derived expenses
   const seedCostFromDetail = detail?.price ?? 0;
-  const feedEntries = useMemo(() =>
-    location?.id && tank?.id ? listFeedingAcrossCrop(location.id, tank.id, detail?.seedDate, detail?.cropEnd) : [],
-  [location?.id, tank?.id, detail?.seedDate, detail?.cropEnd, rev]);
 
   const priceByStockName = useMemo(() => {
     const map = new Map<string, number>();
@@ -229,11 +375,6 @@ const Expenses = () => {
   }, [stocks]);
 
   const feedCost = useMemo(() => feedEntries.reduce((sum, e) => sum + (e.quantity * (priceByStockName.get(e.stockName) ?? 0)), 0), [feedEntries, priceByStockName]);
-
-  // Materials (non-feed) used across crop for this tank
-  const materialsEntries = useMemo(() => (
-    location?.id && tank?.id ? listMaterialsAcrossCrop(location.id, tank.id, detail?.seedDate, detail?.cropEnd) : []
-  ), [location?.id, tank?.id, detail?.seedDate, detail?.cropEnd, rev]);
 
   const priceByStockId = useMemo(() => {
     const map = new Map<string, number>();
@@ -287,35 +428,39 @@ const Expenses = () => {
   const isManager = hasRole(["manager"]);
   const fmt = (n: number) => (isManager ? "—" : `₹ ${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`);
 
-  const onAdd = () => {
-    if (!location?.id || !tank?.id) return;
+  const onAdd = async () => {
+    if (!accountId || !location?.id || !tank?.id) return;
     if (amount <= 0) {
       toast({ title: "Invalid amount", description: "Enter a positive amount." });
       return;
     }
-    const name = category === "other" ? (customName.trim() || "Other") : categoryLabel[category];
-    const entry: ExpenseEntry = {
-      id: crypto.randomUUID(),
-      category,
-      name,
-      amount,
-      date: dateStr,
-      time: timeStr,
-      notes: notes || undefined,
-      createdAt: new Date().toISOString(),
-    };
+    
+    try {
+      const name = category === "other" ? (customName.trim() || "Other") : categoryLabel[category];
+      
+      await saveExpense(accountId, location.id, tank.id, {
+        category,
+        name,
+        amount,
+        date: dateStr,
+        time: timeStr,
+        notes: notes || undefined,
+      });
 
-    const list = loadExpenses(location.id, tank.id);
-    list.push(entry);
-    saveExpenses(location.id, tank.id, list);
+      // Reload expenses
+      const updatedExpenses = await loadExpenses(accountId, location.id, tank.id);
+      setEntries(updatedExpenses);
 
-    setAmount(0);
-    setNotes("");
-    setCustomName("");
-    setCategory("manpower");
-    setDateStr(todayKey);
-    toast({ title: "Saved", description: `${name} — ₹ ${entry.amount.toFixed(2)}` });
-    setRev((r) => r + 1);
+      setAmount(0);
+      setNotes("");
+      setCustomName("");
+      setCategory("manpower");
+      setDateStr(todayKey);
+      toast({ title: "Saved", description: `${name} — ₹ ${amount.toFixed(2)}` });
+    } catch (error) {
+      console.error('Error saving expense:', error);
+      toast({ title: "Error", description: "Failed to save expense" });
+    }
   };
 
   return (

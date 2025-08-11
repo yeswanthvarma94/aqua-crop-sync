@@ -126,6 +126,48 @@ export type Database = {
           },
         ]
       }
+      feeding_logs: {
+        Row: {
+          account_id: string
+          created_at: string
+          fed_at: string
+          id: string
+          location_id: string | null
+          notes: string | null
+          quantity: number
+          schedule: string | null
+          stock_id: string | null
+          tank_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          fed_at?: string
+          id?: string
+          location_id?: string | null
+          notes?: string | null
+          quantity: number
+          schedule?: string | null
+          stock_id?: string | null
+          tank_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          fed_at?: string
+          id?: string
+          location_id?: string | null
+          notes?: string | null
+          quantity?: number
+          schedule?: string | null
+          stock_id?: string | null
+          tank_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       locations: {
         Row: {
           account_id: string
