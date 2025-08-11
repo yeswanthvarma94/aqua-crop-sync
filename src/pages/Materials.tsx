@@ -14,7 +14,7 @@ import { useSelection } from "@/state/SelectionContext";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { useEffect as ReactUseEffect } from "react";
-import { enqueueChange } from "@/lib/approvals";
+
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/state/AuthContext";
 
@@ -66,7 +66,7 @@ const Materials = () => {
   const { location, tank } = useSelection();
   const { toast } = useToast();
   const todayKey = format(new Date(), "yyyy-MM-dd");
-  const { accountId, hasRole } = useAuth();
+  const { accountId } = useAuth();
 
   useSEO("Materials | AquaLedger", "Log medicines, minerals, and other materials; auto-deduct stock and see low-stock alerts.");
 
@@ -116,7 +116,7 @@ const Materials = () => {
     const end = new Date(`${dateKey}T23:59:59.999Z`);
     const { data, error } = await supabase
       .from("material_logs")
-      .select("id, stock_id, quantity, note, tank_id, location_id, logged_at")
+      .select("id, stock_id, quantity, note, tank_id, location_id, logged_at, stocks(name, category, unit)")
       .eq("account_id", accountId)
       .eq("location_id", locationId)
       .eq("tank_id", tankId)
@@ -127,9 +127,9 @@ const Materials = () => {
       const mapped: MaterialLogEntry[] = (data || []).map((e: any) => ({
         tankId: e.tank_id,
         stockId: e.stock_id,
-        stockName: "", // not joined to keep simple
-        category: "others",
-        unit: "kg",
+        stockName: e.stocks?.name || "",
+        category: e.stocks?.category || "others",
+        unit: e.stocks?.unit || "kg",
         quantity: Number(e.quantity),
         time: new Date(e.logged_at).toISOString().slice(11, 16),
         notes: e.note || undefined,
@@ -151,7 +151,7 @@ const Materials = () => {
   const remaining = selectedStock?.quantity ?? 0;
 
   const saveUsage = async () => {
-    if (!location?.id || !tank?.id) return;
+    if (!location?.id || !tank?.id || !accountId) return;
     if (!selectedStock) {
       toast({ title: "Select material", description: "Choose a material stock." });
       return;
@@ -165,36 +165,47 @@ const Materials = () => {
       return;
     }
 
-    const entry: MaterialLogEntry = {
-      tankId: tank.id,
-      stockId: selectedStock.id,
-      stockName: selectedStock.name,
-      category: selectedStock.category,
-      unit: selectedStock.unit,
-      quantity,
-      time: timeStr,
-      notes: notes || undefined,
-      createdAt: new Date().toISOString(),
-    };
+    try {
+      // Compute logged_at from selected date (todayKey) and time
+      const loggedAt = new Date(`${todayKey}T${timeStr}:00.000Z`);
 
-    await enqueueChange("materials/log", {
-      accountId,
-      locationId: location.id,
-      tankId: tank.id,
-      dateKey: todayKey,
-      entry,
-      stockId: selectedStock.id,
-      quantity,
-    }, `Materials: ${entry.stockName} — ${entry.quantity} ${entry.unit}`);
+      // 1) Insert material log
+      const { error: logError } = await supabase.from("material_logs").insert([
+        {
+          account_id: accountId,
+          location_id: location.id,
+          tank_id: tank.id,
+          stock_id: selectedStock.id,
+          quantity,
+          note: notes || null,
+          logged_at: loggedAt.toISOString(),
+        },
+      ]);
+      if (logError) throw logError;
 
-  setQuantity(0);
-    setNotes("");
-    if (hasRole(["owner"])) {
-      toast({ title: "Saved", description: `${entry.stockName} — ${entry.quantity} ${entry.unit}` });
-    } else {
-      toast({ title: "Submitted for approval", description: `${entry.stockName} — ${entry.quantity} ${entry.unit}` });
+      // 2) Fetch latest stock quantity and subtract used quantity
+      const { data: stockRow, error: stockFetchError } = await supabase
+        .from("stocks")
+        .select("quantity")
+        .eq("id", selectedStock.id)
+        .maybeSingle();
+      if (stockFetchError) throw stockFetchError;
+      const currentQty = Number(stockRow?.quantity ?? 0);
+      const newQty = Math.max(0, currentQty - Number(quantity));
+      const { error: stockUpdateError } = await supabase
+        .from("stocks")
+        .update({ quantity: newQty })
+        .eq("id", selectedStock.id);
+      if (stockUpdateError) throw stockUpdateError;
+
+      // Reset inputs and refresh
+      setQuantity(0);
+      setNotes("");
+      toast({ title: "Saved", description: `${selectedStock.name} — ${quantity} ${selectedStock.unit}` });
+      setRev((r) => r + 1);
+    } catch (e) {
+      toast({ title: "Error", description: "Failed to save. Please try again.", variant: "destructive" });
     }
-    setRev(r => r + 1);
   };
 
   return (
