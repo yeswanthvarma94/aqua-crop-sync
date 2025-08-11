@@ -12,6 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 import { cropDayFromStartIST } from "@/lib/time";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/state/AuthContext";
 
 
 interface Tank { id: string; locationId: string; name: string; type: "shrimp" | "fish" }
@@ -42,68 +44,73 @@ interface FeedingEntry {
   createdAt: string;
 }
 
-const loadTanks = (): Tank[] => {
-  try {
-    const raw = localStorage.getItem("tanks");
-    return raw ? (JSON.parse(raw) as Tank[]) : [];
-  } catch {
-    return [];
-  }
-};
-const loadActiveDetail = (tankId: string): TankDetail | null => {
-  try {
-    const raw = localStorage.getItem(`tankDetail:${tankId}`);
-    return raw ? (JSON.parse(raw) as TankDetail) : null;
-  } catch {
-    return null;
-  }
+// Database functions
+const loadTankFromDB = async (tankId: string) => {
+  const { data } = await supabase
+    .from("tanks")
+    .select("id, name, type, location_id")
+    .eq("id", tankId)
+    .single();
+  return data ? { id: data.id, name: data.name, type: data.type, locationId: data.location_id } : null;
 };
 
-const stockKey = (locationId: string) => `stocks:${locationId}`;
-const loadStocks = (locationId: string): StockRecord[] => {
-  try {
-    const raw = localStorage.getItem(stockKey(locationId));
-    return raw ? (JSON.parse(raw) as StockRecord[]) : [];
-  } catch {
-    return [];
-  }
-};
-const saveStocks = (locationId: string, items: StockRecord[]) => {
-  localStorage.setItem(stockKey(locationId), JSON.stringify(items));
+const loadActiveCropFromDB = async (tankId: string) => {
+  const { data } = await supabase
+    .from("tank_crops")
+    .select("seed_date, end_date")
+    .eq("tank_id", tankId)
+    .is("end_date", null)
+    .maybeSingle();
+  return data ? { seedDate: data.seed_date, cropEnd: data.end_date || undefined } : null;
 };
 
-const feedingKey = (locationId: string, tankId: string, dateKey: string) => `feeding:${locationId}:${tankId}:${dateKey}`;
-const loadFeeding = (locationId: string, tankId: string, dateKey: string): FeedingEntry[] => {
-  try {
-    const raw = localStorage.getItem(feedingKey(locationId, tankId, dateKey));
-    return raw ? (JSON.parse(raw) as FeedingEntry[]) : [];
-  } catch {
-    return [];
-  }
-};
-const saveFeeding = (locationId: string, tankId: string, dateKey: string, list: FeedingEntry[]) => {
-  localStorage.setItem(feedingKey(locationId, tankId, dateKey), JSON.stringify(list));
+const loadStocksFromDB = async (locationId: string): Promise<StockRecord[]> => {
+  const { data } = await supabase
+    .from("stocks")
+    .select("*")
+    .eq("location_id", locationId)
+    .eq("category", "feed");
+  return (data || []).map((s: any) => ({
+    id: s.id,
+    name: s.name,
+    category: s.category,
+    unit: s.unit,
+    quantity: Number(s.quantity),
+    pricePerUnit: Number(s.price_per_unit),
+    totalAmount: Number(s.total_amount),
+    minStock: Number(s.min_stock),
+    expiryDate: s.expiry_date,
+    notes: s.notes,
+    createdAt: s.created_at,
+    updatedAt: s.updated_at,
+  }));
 };
 
 const TankFeeding = () => {
   const { locationId, tankId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user, accountId } = useAuth();
 
-  const tanks = useMemo(() => loadTanks(), []);
-  const baseTank = tanks.find((t) => t.id === tankId);
+  const [tank, setTank] = useState<Tank | null>(null);
+  const [activeCrop, setActiveCrop] = useState<any>(null);
 
-  // Tank active status
-  const [detail, setDetail] = useState<TankDetail | null>(null);
+  // Load tank and crop data
   useEffect(() => {
-    if (!tankId) return;
-    setDetail(loadActiveDetail(tankId));
+    const loadData = async () => {
+      if (!tankId) return;
+      const tankData = await loadTankFromDB(tankId);
+      const cropData = await loadActiveCropFromDB(tankId);
+      setTank(tankData);
+      setActiveCrop(cropData);
+    };
+    loadData();
   }, [tankId]);
 
-  const name = detail?.name || baseTank?.name || "";
-  const type = (detail?.type || baseTank?.type || "fish") as "shrimp" | "fish";
-  const seedDate = detail?.seedDate ? new Date(detail.seedDate) : undefined;
-  const cropEnd = detail?.cropEnd ? new Date(detail.cropEnd) : undefined;
+  const name = tank?.name || "";
+  const type = (tank?.type || "fish") as "shrimp" | "fish";
+  const seedDate = activeCrop?.seedDate ? new Date(activeCrop.seedDate) : undefined;
+  const cropEnd = activeCrop?.cropEnd ? new Date(activeCrop.cropEnd) : undefined;
   const hasActiveCrop = !!seedDate && !cropEnd;
   const dayCounter = hasActiveCrop && seedDate ? cropDayFromStartIST(seedDate) : null;
 
@@ -134,17 +141,32 @@ const TankFeeding = () => {
   const [newStockPpu, setNewStockPpu] = useState<number>(0);
 
   useEffect(() => {
-    if (locationId) setStocks(loadStocks(locationId));
+    const loadData = async () => {
+      if (locationId) {
+        const stockData = await loadStocksFromDB(locationId);
+        setStocks(stockData);
+      }
+    };
+    loadData();
   }, [locationId, rev]);
 
+  // For now, keep feeding entries in localStorage as they need a proper table structure
   useEffect(() => {
-    if (locationId && tankId) setEntries(loadFeeding(locationId, tankId, todayKey));
+    if (locationId && tankId) {
+      try {
+        const key = `feeding:${locationId}:${tankId}:${todayKey}`;
+        const raw = localStorage.getItem(key);
+        setEntries(raw ? JSON.parse(raw) : []);
+      } catch {
+        setEntries([]);
+      }
+    }
   }, [locationId, tankId, todayKey, rev]);
 
   const completed = useMemo(() => new Set(entries.map(e => e.schedule)), [entries]);
   const remainingStock = selectedStock?.quantity ?? 0;
 
-  const saveFeedingEntry = () => {
+  const saveFeedingEntry = async () => {
     if (!hasActiveCrop) {
       toast({ title: "Inactive tank", description: "Start crop to record feeding." });
       return;
@@ -181,18 +203,19 @@ const TankFeeding = () => {
       createdAt: new Date().toISOString(),
     };
 
-    const list = loadFeeding(locationId, tankId, todayKey);
+    // Save feeding entry to localStorage for now
+    const key = `feeding:${locationId}:${tankId}:${todayKey}`;
+    const existingEntries = localStorage.getItem(key);
+    const list = existingEntries ? JSON.parse(existingEntries) : [];
     list.push(entry);
-    saveFeeding(locationId, tankId, todayKey, list);
+    localStorage.setItem(key, JSON.stringify(list));
 
-    // Deduct from local stock list
-    const items = loadStocks(locationId);
-    const idx = items.findIndex((s) => s.id === selectedStock.id);
-    if (idx >= 0) {
-      const nextQty = Math.max(0, Number(items[idx].quantity || 0) - Number(quantity));
-      items[idx] = { ...items[idx], quantity: nextQty };
-      saveStocks(locationId, items);
-    }
+    // Update stock quantity in database
+    const nextQty = Math.max(0, selectedStock.quantity - quantity);
+    await supabase
+      .from("stocks")
+      .update({ quantity: nextQty })
+      .eq("id", selectedStock.id);
 
     setSchedule("");
     setQuantity(0);
@@ -201,8 +224,8 @@ const TankFeeding = () => {
     toast({ title: "Saved", description: `Schedule ${entry.schedule}` });
   };
 
-  const addStock = () => {
-    if (!locationId) return;
+  const addStock = async () => {
+    if (!locationId || !accountId) return;
     const name = newStockName.trim();
     if (!name) {
       toast({ title: "Missing name", description: "Enter stock name." });
@@ -216,40 +239,58 @@ const TankFeeding = () => {
       toast({ title: "Invalid price", description: "Price per unit cannot be negative." });
       return;
     }
-    const amount = newStockQty * newStockPpu;
-    const now = new Date().toISOString();
 
-    // Upsert feed stock locally
-    const items = loadStocks(locationId);
-    const idx = items.findIndex((s) => s.name === name && s.category === "feed" && s.unit === newStockUnit);
-    const amountDelta = newStockQty * newStockPpu;
-    if (idx >= 0) {
-      const s = items[idx];
-      items[idx] = {
-        ...s,
-        quantity: Number(s.quantity || 0) + Number(newStockQty),
-        pricePerUnit: newStockPpu,
-        totalAmount: Number(s.totalAmount || 0) + amountDelta,
-      };
-    } else {
-      items.unshift({
-        id: crypto.randomUUID(),
-        name,
-        category: "feed",
-        unit: newStockUnit,
-        quantity: newStockQty,
-        pricePerUnit: newStockPpu,
-        totalAmount: amountDelta,
-        minStock: 0,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      } as any);
+    try {
+      // Check if stock already exists
+      const { data: existingStock } = await supabase
+        .from("stocks")
+        .select("*")
+        .eq("location_id", locationId)
+        .eq("name", name)
+        .eq("category", "feed")
+        .eq("unit", newStockUnit)
+        .maybeSingle();
+
+      if (existingStock) {
+        // Update existing stock
+        const newQuantity = Number(existingStock.quantity) + newStockQty;
+        const newTotalAmount = Number(existingStock.total_amount) + (newStockQty * newStockPpu);
+        
+        await supabase
+          .from("stocks")
+          .update({
+            quantity: newQuantity,
+            price_per_unit: newStockPpu,
+            total_amount: newTotalAmount,
+          })
+          .eq("id", existingStock.id);
+      } else {
+        // Create new stock
+        await supabase
+          .from("stocks")
+          .insert({
+            account_id: accountId,
+            location_id: locationId,
+            name,
+            category: "feed",
+            unit: newStockUnit,
+            quantity: newStockQty,
+            price_per_unit: newStockPpu,
+            total_amount: newStockQty * newStockPpu,
+            min_stock: 0,
+          });
+      }
+
+      setAddOpen(false);
+      setNewStockName(""); 
+      setNewStockQty(0); 
+      setNewStockUnit("kg"); 
+      setNewStockPpu(0);
+      setRev(r => r + 1); // Refresh stocks
+      toast({ title: "Saved", description: `${name} — ${newStockQty} ${newStockUnit}` });
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to save stock" });
     }
-    saveStocks(locationId, items);
-
-    setAddOpen(false);
-    setNewStockName(""); setNewStockQty(0); setNewStockUnit("kg"); setNewStockPpu(0);
-    toast({ title: "Saved", description: `${name} — ${newStockQty} ${newStockUnit}` });
   };
 
   return (
