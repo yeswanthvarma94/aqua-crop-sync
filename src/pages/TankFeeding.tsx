@@ -150,17 +150,49 @@ const TankFeeding = () => {
     loadData();
   }, [locationId, rev]);
 
-  // For now, keep feeding entries in localStorage as they need a proper table structure
+  // Load feeding entries from Supabase
   useEffect(() => {
-    if (locationId && tankId) {
+    const loadFeedingEntries = async () => {
+      if (!locationId || !tankId) return;
+      
       try {
-        const key = `feeding:${locationId}:${tankId}:${todayKey}`;
-        const raw = localStorage.getItem(key);
-        setEntries(raw ? JSON.parse(raw) : []);
-      } catch {
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date();
+        endOfDay.setHours(23, 59, 59, 999);
+
+        const { data } = await supabase
+          .from("feeding_logs")
+          .select(`
+            schedule,
+            quantity,
+            fed_at,
+            notes,
+            stocks!inner(name, unit)
+          `)
+          .eq("tank_id", tankId)
+          .gte("fed_at", startOfDay.toISOString())
+          .lte("fed_at", endOfDay.toISOString())
+          .order("fed_at", { ascending: true });
+
+        const feedingEntries: FeedingEntry[] = (data || []).map((entry: any) => ({
+          schedule: entry.schedule || "",
+          stockName: entry.stocks.name,
+          unit: entry.stocks.unit,
+          quantity: Number(entry.quantity),
+          time: format(new Date(entry.fed_at), "HH:mm"),
+          notes: entry.notes || undefined,
+          createdAt: entry.fed_at,
+        }));
+
+        setEntries(feedingEntries);
+      } catch (error) {
+        console.error("Error loading feeding entries:", error);
         setEntries([]);
       }
-    }
+    };
+
+    loadFeedingEntries();
   }, [locationId, tankId, todayKey, rev]);
 
   const completed = useMemo(() => new Set(entries.map(e => e.schedule)), [entries]);
@@ -193,35 +225,50 @@ const TankFeeding = () => {
       return;
     }
 
-  const entry: FeedingEntry = {
-      schedule,
-      stockName: selectedStock.name,
-      unit: selectedStock.unit,
-      quantity,
-      time: timeStr,
-      notes: notes || undefined,
-      createdAt: new Date().toISOString(),
-    };
+    try {
+      // Create feeding time with today's date and selected time
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      const feedingTime = new Date();
+      feedingTime.setHours(hours, minutes, 0, 0);
 
-    // Save feeding entry to localStorage for now
-    const key = `feeding:${locationId}:${tankId}:${todayKey}`;
-    const existingEntries = localStorage.getItem(key);
-    const list = existingEntries ? JSON.parse(existingEntries) : [];
-    list.push(entry);
-    localStorage.setItem(key, JSON.stringify(list));
+      // Save feeding entry to Supabase
+      const { error: feedingError } = await supabase
+        .from("feeding_logs")
+        .insert({
+          account_id: accountId,
+          location_id: locationId,
+          tank_id: tankId,
+          stock_id: selectedStock.id,
+          schedule: schedule,
+          quantity: quantity,
+          fed_at: feedingTime.toISOString(),
+          notes: notes || null,
+        });
 
-    // Update stock quantity in database
-    const nextQty = Math.max(0, selectedStock.quantity - quantity);
-    await supabase
-      .from("stocks")
-      .update({ quantity: nextQty })
-      .eq("id", selectedStock.id);
+      if (feedingError) {
+        throw feedingError;
+      }
 
-    setSchedule("");
-    setQuantity(0);
-    setNotes("");
-    setRev((r) => r + 1);
-    toast({ title: "Saved", description: `Schedule ${entry.schedule}` });
+      // Update stock quantity in database
+      const nextQty = Math.max(0, selectedStock.quantity - quantity);
+      const { error: stockError } = await supabase
+        .from("stocks")
+        .update({ quantity: nextQty })
+        .eq("id", selectedStock.id);
+
+      if (stockError) {
+        throw stockError;
+      }
+
+      setSchedule("");
+      setQuantity(0);
+      setNotes("");
+      setRev((r) => r + 1);
+      toast({ title: "Saved", description: `Schedule ${schedule} feeding recorded` });
+    } catch (error) {
+      console.error("Error saving feeding entry:", error);
+      toast({ title: "Error", description: "Failed to save feeding entry" });
+    }
   };
 
   const addStock = async () => {
