@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/state/AuthContext";
-import { loadPendingChanges } from "@/lib/approvals";
+
 import { useEffect, useMemo, useState } from "react";
 
 // SEO hook
@@ -119,18 +119,6 @@ const Settings = () => {
   }, [plan]);
 
   // Fetch pending approvals count asynchronously
-  const [pendingCount, setPendingCount] = useState(0);
-  useEffect(() => {
-    let active = true;
-    loadPendingChanges()
-      .then((list) => {
-        if (active) setPendingCount(list.length);
-      })
-      .catch((err) => {
-        console.error("Failed to load pending approvals:", err);
-      });
-    return () => { active = false; };
-  }, []);
 
   const storageBytes = bytesForLocalStorage();
   const storageKB = Math.round(storageBytes / 1024);
@@ -213,7 +201,7 @@ const Settings = () => {
                 </Select>
               </div>
               <div className="space-y-1 text-sm">
-                <div>Approvals: <span className="font-medium">{limits.approvals ? "Enabled" : "Disabled"}</span></div>
+                
                 <div>Team access: <span className="font-medium">{limits.team ? "Enabled" : "Disabled"}</span></div>
                 <div>Locations: <span className="font-medium">{String(limits.locations)}</span></div>
                 <div>Tanks/location: <span className="font-medium">{String(limits.tanksPerLoc)}</span></div>
@@ -347,7 +335,7 @@ const Settings = () => {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               <div className="rounded-md border p-3">
-                <div className="flex items-center justify-between"><span>Pending approvals</span><span className="font-medium">{pendingCount}</span></div>
+                
                 <div className="flex items-center justify-between"><span>Local storage usage</span><span className="font-medium">{storageKB} KB</span></div>
                 <div className="flex items-center justify-between"><span>Keys</span><span className="font-medium">{localStorage.length}</span></div>
               </div>
