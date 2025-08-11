@@ -56,6 +56,202 @@ export const savePendingChanges = (_list: PendingChange[]) => {
   // no-op with Supabase backend
 };
 
+// Apply a change immediately (used when current user is owner)
+const applyImmediateChange = async (type: ChangeType, payload: any, accountId: string | null) => {
+  const acc = accountId || getActiveAccountId();
+  if (!acc) throw new Error("No active account");
+
+  // Minimal helpers for feeding local mirror
+  const feedingKey = (locationId: string, tankId: string, dateKey: string) => `feeding:${locationId}:${tankId}:${dateKey}`;
+  const saveFeedingLocal = (locationId: string, tankId: string, dateKey: string, list: any[]) =>
+    localStorage.setItem(feedingKey(locationId, tankId, dateKey), JSON.stringify(list));
+  const loadFeedingLocal = (locationId: string, tankId: string, dateKey: string) => {
+    try { const raw = localStorage.getItem(feedingKey(locationId, tankId, dateKey)); return raw ? JSON.parse(raw) : []; } catch { return []; }
+  };
+
+  switch (type) {
+    case "materials/log": {
+      const { locationId, tankId, dateKey, entry, stockId, quantity } = payload;
+      const datePart = (dateKey || new Date().toISOString().slice(0, 10)).slice(0, 10);
+      const timePart = ((entry?.time as string) || "00:00").padStart(5, "0");
+      const loggedAt = new Date(`${datePart}T${timePart}:00.000Z`).toISOString();
+
+      await supabase.from("material_logs").insert([
+        {
+          account_id: acc,
+          location_id: locationId || null,
+          stock_id: stockId || null,
+          tank_id: tankId || null,
+          quantity: Number(quantity || 0),
+          note: entry?.notes || null,
+          logged_at: loggedAt,
+        },
+      ]);
+
+      if (stockId) {
+        const { data: s } = await supabase.from("stocks").select("quantity").eq("id", stockId).maybeSingle();
+        const currentQty = Number((s as any)?.quantity || 0);
+        await supabase
+          .from("stocks")
+          .update({ quantity: Math.max(0, currentQty - Number(quantity || 0)) })
+          .eq("id", stockId);
+      }
+      break;
+    }
+    case "feeding/log": {
+      const { locationId, tankId, dateKey, entry, stockId, quantity } = payload;
+      const existing = loadFeedingLocal(locationId, tankId, dateKey);
+      existing.push(entry);
+      saveFeedingLocal(locationId, tankId, dateKey, existing);
+
+      const datePart = (dateKey || new Date().toISOString().slice(0, 10)).slice(0, 10);
+      const timePart = ((entry?.time as string) || "00:00").padStart(5, "0");
+      const loggedAt = new Date(`${datePart}T${timePart}:00.000Z`).toISOString();
+
+      await supabase.from("material_logs").insert([
+        {
+          account_id: acc,
+          location_id: locationId || null,
+          stock_id: stockId || null,
+          tank_id: tankId || null,
+          quantity: Number(quantity || 0),
+          note: entry?.notes || null,
+          logged_at: loggedAt,
+        },
+      ]);
+
+      if (stockId) {
+        const { data: s2 } = await supabase.from("stocks").select("quantity").eq("id", stockId).maybeSingle();
+        const currentQty2 = Number((s2 as any)?.quantity || 0);
+        await supabase
+          .from("stocks")
+          .update({ quantity: Math.max(0, currentQty2 - Number(quantity || 0)) })
+          .eq("id", stockId);
+      }
+      break;
+    }
+    case "expenses/add": {
+      const { locationId, tankId, entry } = payload;
+      const incurredAt = (entry?.date || entry?.dateKey || new Date().toISOString().slice(0, 10)).slice(0, 10);
+      await supabase.from("expenses").insert([
+        {
+          account_id: acc,
+          location_id: locationId || null,
+          tank_id: tankId || null,
+          category: entry?.category || null,
+          name: entry?.name || null,
+          notes: entry?.notes || null,
+          description: entry?.name || entry?.category || 'Expense',
+          amount: Number(entry?.amount || 0),
+          incurred_at: incurredAt,
+        },
+      ]);
+      break;
+    }
+    case "stocks/upsert": {
+      const { locationId, name, unit, quantity, category, pricePerUnit, minStock, expiryISO, notes } = payload;
+      const { data: existing } = await supabase
+        .from("stocks")
+        .select("id, quantity, total_amount")
+        .eq("account_id", acc)
+        .eq("location_id", locationId)
+        .eq("name", name)
+        .eq("unit", unit)
+        .maybeSingle();
+
+      const qty = Number(quantity || 0);
+      const ppu = Number(pricePerUnit || 0);
+      const incrAmount = qty * ppu;
+
+      if (existing?.id) {
+        await supabase
+          .from("stocks")
+          .update({
+            quantity: Math.max(0, Number((existing as any).quantity || 0) + qty),
+            price_per_unit: ppu,
+            min_stock: Number(minStock || 0),
+            expiry_date: expiryISO ? new Date(expiryISO).toISOString().slice(0, 10) : null,
+            notes: notes || null,
+            total_amount: Number((existing as any).total_amount || 0) + incrAmount,
+          })
+          .eq("id", (existing as any).id);
+      } else {
+        await supabase.from("stocks").insert([
+          {
+            account_id: acc,
+            location_id: locationId || null,
+            name,
+            category: category || null,
+            unit,
+            quantity: Math.max(0, qty),
+            price_per_unit: ppu,
+            min_stock: Number(minStock || 0),
+            expiry_date: expiryISO ? new Date(expiryISO).toISOString().slice(0, 10) : null,
+            notes: notes || null,
+            total_amount: incrAmount,
+          },
+        ]);
+      }
+      break;
+    }
+    case "tanks/create": {
+      const { tank } = payload;
+      await supabase.from("tanks").insert([{
+        id: tank.id,
+        account_id: tank.account_id || acc,
+        location_id: tank.locationId,
+        name: tank.name,
+        type: tank.type || null,
+      }]);
+      break;
+    }
+    case "tanks/start_crop": {
+      const { tankId, iso } = payload;
+      await supabase.from("tank_crops").insert([{
+        account_id: acc,
+        tank_id: tankId,
+        seed_date: new Date(iso).toISOString().slice(0, 10),
+        end_date: null,
+      }]);
+      break;
+    }
+    case "tanks/end_crop": {
+      const { tankId, iso } = payload;
+      await supabase
+        .from("tank_crops")
+        .update({ end_date: new Date(iso).toISOString().slice(0, 10) })
+        .eq("tank_id", tankId)
+        .is("end_date", null);
+      break;
+    }
+    case "locations/create": {
+      const { location } = payload;
+      await supabase.from("locations").insert([{
+        id: location.id,
+        account_id: location.account_id || acc,
+        name: location.name,
+        address: location.address || null,
+      }]);
+      break;
+    }
+    case "locations/update": {
+      const { id, updates } = payload;
+      await supabase.from("locations").update({
+        name: updates?.name ?? undefined,
+        address: updates?.address ?? undefined,
+      }).eq("id", id);
+      break;
+    }
+    case "locations/delete": {
+      const { id } = payload;
+      await supabase.from("locations").delete().eq("id", id);
+      break;
+    }
+    default:
+      break;
+  }
+};
+
 export const enqueueChange = async <T = any>(type: ChangeType, payload: T, description: string): Promise<PendingChange<T> | null> => {
   const accountId = getActiveAccountId();
   if (!accountId) {
@@ -65,14 +261,31 @@ export const enqueueChange = async <T = any>(type: ChangeType, payload: T, descr
   const { data: userRes } = await supabase.auth.getUser();
   const userId = (userRes as any).user?.id ?? null;
 
+  // If current user is the owner of the active account, apply immediately
+  try {
+    const { data: isOwner } = await supabase.rpc("current_user_is_account_owner", { aid: accountId });
+    if (isOwner === true) {
+      await applyImmediateChange(type, payload, accountId);
+      return {
+        id: crypto.randomUUID(),
+        type,
+        description,
+        payload,
+        createdAt: new Date().toISOString(),
+        status: "approved",
+        createdBy: userId,
+      } as any;
+    }
+  } catch (e) {
+    console.warn("Owner check failed, falling back to queue:", e);
+  }
+
   const toInsert = {
     account_id: accountId,
     type,
     payload,
     status: "pending",
     created_by: userId,
-    // store description inside payload to preserve it; Approvals UI uses row text anyway
-    // alternatively a dedicated column can be added later
   };
 
   const { data, error } = await supabase

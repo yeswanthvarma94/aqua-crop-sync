@@ -73,7 +73,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const accId = await ensureDefaultAccount(sUser.id);
             setAccountId(accId);
             setActiveAccountId(accId);
-            const role = (await getMembershipRole(accId, sUser.id)) || "manager";
+            const role = (await getMembershipRole(accId, sUser.id)) || "owner";
             setUser((prev) => (prev ? { ...prev, role } : prev));
           } catch (e) {
             console.error("Account bootstrap failed:", e);
@@ -108,7 +108,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const accId = await ensureDefaultAccount(sUser.id);
             setAccountId(accId);
             setActiveAccountId(accId);
-            const role = (await getMembershipRole(accId, sUser.id)) || "manager";
+            const role = (await getMembershipRole(accId, sUser.id)) || "owner";
             setUser((prev) => (prev ? { ...prev, role } : prev));
           } catch (e) {
             console.error("Account bootstrap failed:", e);

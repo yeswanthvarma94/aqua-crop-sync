@@ -101,18 +101,18 @@ const Locations = () => {
       if (editing) {
         await enqueueChange("locations/update", { id: editing.id, updates: { name: form.name.trim(), address: form.address?.trim() } }, `Update Location: ${editing.name}`);
         toast({
-          title: "Update Requested",
+          title: hasRole(["owner"]) ? "Updated" : "Update Requested",
           description: hasRole(["owner"]) 
-            ? "Location update has been queued for approval. Visit the Approvals page to approve it."
+            ? "Location updated successfully."
             : "Location update has been sent for approval. An owner will review it soon.",
         });
       } else {
         const newLoc: Location = { id: crypto.randomUUID(), name: form.name.trim(), address: form.address?.trim(), account_id: accountId };
         await enqueueChange("locations/create", { location: newLoc }, `Create Location: ${newLoc.name}`);
         toast({
-          title: "Location Creation Requested",
+          title: hasRole(["owner"]) ? "Created" : "Location Creation Requested",
           description: hasRole(["owner"]) 
-            ? "Your location has been queued for approval. Visit the Approvals page to approve it."
+            ? "Location created successfully."
             : "Your location has been sent for approval. An owner will review it soon.",
         });
       }
@@ -138,9 +138,9 @@ const Locations = () => {
     try {
       await enqueueChange("locations/delete", { id }, `Delete Location`);
       toast({
-        title: "Deletion Requested",
+        title: hasRole(["owner"]) ? "Deleted" : "Deletion Requested",
         description: hasRole(["owner"]) 
-          ? "Location deletion has been queued for approval. Visit the Approvals page to approve it."
+          ? "Location deleted successfully."
           : "Location deletion has been sent for approval. An owner will review it soon.",
       });
       loadPendingChanges();

@@ -66,7 +66,7 @@ const Materials = () => {
   const { location, tank } = useSelection();
   const { toast } = useToast();
   const todayKey = format(new Date(), "yyyy-MM-dd");
-  const { accountId } = useAuth();
+  const { accountId, hasRole } = useAuth();
 
   useSEO("Materials | AquaLedger", "Log medicines, minerals, and other materials; auto-deduct stock and see low-stock alerts.");
 
@@ -187,9 +187,13 @@ const Materials = () => {
       quantity,
     }, `Materials: ${entry.stockName} — ${entry.quantity} ${entry.unit}`);
 
-    setQuantity(0);
+  setQuantity(0);
     setNotes("");
-    toast({ title: "Submitted for approval", description: `${entry.stockName} — ${entry.quantity} ${entry.unit}` });
+    if (hasRole(["owner"])) {
+      toast({ title: "Saved", description: `${entry.stockName} — ${entry.quantity} ${entry.unit}` });
+    } else {
+      toast({ title: "Submitted for approval", description: `${entry.stockName} — ${entry.quantity} ${entry.unit}` });
+    }
     setRev(r => r + 1);
   };
 

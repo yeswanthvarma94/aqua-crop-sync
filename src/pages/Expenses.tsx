@@ -308,7 +308,11 @@ const Expenses = () => {
     enqueueChange("expenses/add", { locationId: location.id, tankId: tank.id, entry }, `Expense: ${name} — ₹ ${entry.amount}`);
 
     setAmount(0); setNotes(""); setCustomName(""); setCategory("manpower"); setDateStr(todayKey);
-    toast({ title: "Submitted for approval", description: `${name} — ₹ ${entry.amount.toFixed(2)}` });
+    if (hasRole(["owner"])) {
+      toast({ title: "Saved", description: `${name} — ₹ ${entry.amount.toFixed(2)}` });
+    } else {
+      toast({ title: "Submitted for approval", description: `${name} — ₹ ${entry.amount.toFixed(2)}` });
+    }
     setRev(r => r + 1);
   };
 

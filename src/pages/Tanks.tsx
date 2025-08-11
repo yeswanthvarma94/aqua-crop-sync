@@ -48,7 +48,7 @@ const Tanks = () => {
   const [tanksAll, setTanksAll] = useState<Tank[]>([]);
   const { toast } = useToast();
   const [rev, setRev] = useState(0);
-  const { accountId } = useAuth();
+  const { accountId, hasRole } = useAuth();
 
   useSEO("Tanks | AquaLedger", "Manage tanks for the selected location. Add, view, and open details.");
 
@@ -112,21 +112,21 @@ const Tanks = () => {
     setOpen(false);
     setFormName("");
     setFormType("fish");
-    toast({ title: "Submitted for approval", description: `${payload.tank.name}` });
+    toast({ title: hasRole(["owner"]) ? "Created" : "Submitted for approval", description: `${payload.tank.name}` });
   };
 
   const onStartCrop = async (t: Tank) => {
     const now = nowIST();
     await enqueueChange("tanks/start_crop", { tankId: t.id, iso: now.toISOString() }, `Start crop — ${t.name}`);
     setRev((r) => r + 1);
-    toast({ title: "Submitted for approval", description: `${t.name}: start crop` });
+    toast({ title: hasRole(["owner"]) ? "Saved" : "Submitted for approval", description: `${t.name}: start crop` });
   };
 
   const onEndCrop = async (t: Tank) => {
     const now = new Date();
     await enqueueChange("tanks/end_crop", { tankId: t.id, iso: now.toISOString() }, `End crop — ${t.name}`);
     setRev((r) => r + 1);
-    toast({ title: "Submitted for approval", description: `${t.name}: end crop` });
+    toast({ title: hasRole(["owner"]) ? "Saved" : "Submitted for approval", description: `${t.name}: end crop` });
   };
 
   return (
