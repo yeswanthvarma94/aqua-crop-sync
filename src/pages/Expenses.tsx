@@ -182,21 +182,18 @@ const saveExpense = async (accountId: string, locationId: string, tankId: string
   }
 };
 
-// Enhanced FeedingEntry with price information
+// Enhanced FeedingEntry with stock reference
 interface FeedingEntryWithPrice extends FeedingEntry {
   stockId: string;
-  pricePerUnit: number;
+  pricePerUnit: number; // filled via stocks map
 }
 
-// Utility to scan feeding entries across crop with price information
+// Utility to scan feeding entries across crop (no FK join)
 const listFeedingAcrossCrop = async (accountId: string, locationId: string, tankId: string, startISO?: string, endISO?: string): Promise<FeedingEntryWithPrice[]> => {
   try {
     let query = supabase
       .from('feeding_logs')
-      .select(`
-        *,
-        stocks!inner(name, unit, price_per_unit)
-      `)
+      .select('*')
       .eq('account_id', accountId)
       .eq('location_id', locationId)
       .eq('tank_id', tankId);
@@ -212,15 +209,15 @@ const listFeedingAcrossCrop = async (accountId: string, locationId: string, tank
     
     if (error) throw error;
     
-    return (data || []).map(log => ({
+    return (data || []).map((log: any) => ({
       schedule: log.schedule || 'morning',
-      stockName: log.stocks.name,
-      unit: log.stocks.unit as StockRecord["unit"],
+      stockName: 'Feed',
+      unit: 'kg', // fallback; display only
       quantity: Number(log.quantity),
       time: new Date(log.fed_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
       createdAt: log.created_at,
       stockId: log.stock_id,
-      pricePerUnit: Number(log.stocks.price_per_unit || 0),
+      pricePerUnit: 0,
     }));
   } catch (error) {
     console.error('Error loading feeding entries:', error);
@@ -376,17 +373,18 @@ const Expenses = () => {
   // Derived expenses
   const seedCostFromDetail = detail?.price ?? 0;
 
-  // Calculate feed cost directly from feeding entries with stock prices
-  const feedCost = useMemo(() => 
-    feedEntries.reduce((sum, entry) => sum + (entry.quantity * entry.pricePerUnit), 0), 
-    [feedEntries]
-  );
-
+  // Build price map by stock id (includes feed and materials)
   const priceByStockId = useMemo(() => {
     const map = new Map<string, number>();
-    stocks.filter(s => s.category !== "feed").forEach(s => map.set(s.id, s.pricePerUnit || 0));
+    stocks.forEach(s => map.set(s.id, s.pricePerUnit || 0));
     return map;
   }, [stocks]);
+
+  // Calculate feed cost from consumed quantities and stock prices
+  const feedCost = useMemo(() =>
+    feedEntries.reduce((sum, entry) => sum + (entry.quantity * (priceByStockId.get(entry.stockId) ?? 0)), 0),
+    [feedEntries, priceByStockId]
+  );
 
   const materialsMedicineCost = useMemo(() => materialsEntries
     .filter(e => e.category === "medicine")
