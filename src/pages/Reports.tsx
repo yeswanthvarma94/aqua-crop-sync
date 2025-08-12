@@ -12,6 +12,7 @@ import { format } from "date-fns";
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, BarChart, Bar, Legend } from "recharts";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+import { supabase } from "@/integrations/supabase/client";
 
 // Local models reused
 interface StockRecord {
@@ -29,7 +30,7 @@ interface StockRecord {
   updatedAt: string;
 }
 interface FeedingEntry { schedule: string; stockName: string; unit: StockRecord["unit"]; quantity: number; time: string; createdAt: string; }
-interface MaterialLogEntry { tankId: string; stockId: string; stockName: string; category: StockRecord["category"]; unit: StockRecord["unit"]; quantity: number; time: string; createdAt: string; }
+interface MaterialLogEntry { tankId: string; stockId: string; stockName: string; category: StockRecord["category"]; unit: StockRecord["unit"]; quantity: number; time: string; createdAt: string; note?: string }
 interface ExpenseEntry { id: string; category: string; name: string; amount: number; date: string; time?: string; createdAt: string }
 interface TankDetail { tankId: string; name: string; type: "shrimp" | "fish"; seedDate?: string; cropEnd?: string; totalSeed?: number }
 
@@ -94,10 +95,11 @@ const useSEO = (title: string, description: string) => {
 
 const Reports = () => {
   const { location, tank } = useSelection();
-  const { hasRole } = useAuth();
+  const { accountId, hasRole } = useAuth();
   useSEO("Reports | AquaLedger", "Reports with date range, FCR trend, feed/day and cost breakdown.");
 
   const [stocks, setStocks] = useState<StockRecord[]>([]);
+  const statementRef = useRef<HTMLDivElement>(null);
 
   const detail = useMemo(() => (tank ? loadTankDetail(tank.id) : null), [tank?.id]);
   const defaultStart = useMemo(() => detail?.seedDate ? new Date(detail.seedDate) : new Date(Date.now() - 13*24*60*60*1000), [detail?.seedDate]);
@@ -107,7 +109,7 @@ const Reports = () => {
   const [fr, setFr] = useState<number>(2); // %
   const [sr, setSr] = useState<number>(90); // %
 
-  useEffect(() => { if (location?.id) setStocks(loadStocks(location.id)); }, [location?.id]);
+  // stocks will be loaded from Supabase based on entries used in the selected period
 
   const priceByStockName = useMemo(() => {
     const map = new Map<string, number>();
@@ -123,9 +125,84 @@ const Reports = () => {
   const sDate = useMemo(() => new Date(`${startDate}T00:00:00`), [startDate]);
   const eDate = useMemo(() => new Date(`${endDate}T23:59:59`), [endDate]);
 
-  const feedEntries = useMemo(() => (location?.id && tank?.id ? listFeedingInRange(location.id, tank.id, sDate, eDate) : []), [location?.id, tank?.id, sDate, eDate]);
-  const materialEntries = useMemo(() => (location?.id && tank?.id ? listMaterialsInRange(location.id, tank.id, sDate, eDate) : []), [location?.id, tank?.id, sDate, eDate]);
-  const expenseEntries = useMemo(() => (location?.id && tank?.id ? loadExpenses(location.id, tank.id).filter(e => { const d = new Date(e.date); return d >= sDate && d <= eDate; }) : []), [location?.id, tank?.id, sDate, eDate]);
+  const [feedEntries, setFeedEntries] = useState<FeedingEntry[]>([]);
+  const [materialEntries, setMaterialEntries] = useState<MaterialLogEntry[]>([]);
+  const [expenseEntries, setExpenseEntries] = useState<ExpenseEntry[]>([]);
+
+  useEffect(() => {
+    const load = async () => {
+      if (!accountId || !location?.id || !tank?.id) {
+        setFeedEntries([]); setMaterialEntries([]); setExpenseEntries([]); setStocks([]);
+        return;
+      }
+      const startTs = `${startDate}T00:00:00`;
+      const endTs = `${endDate}T23:59:59`;
+      const [fRes, mRes, eRes] = await Promise.all([
+        supabase.from("feeding_logs").select("id, schedule, stock_id, quantity, fed_at, notes").eq("account_id", accountId).eq("location_id", location.id).eq("tank_id", tank.id).gte("fed_at", startTs).lte("fed_at", endTs).order("fed_at", { ascending: true }),
+        supabase.from("material_logs").select("id, stock_id, quantity, logged_at, note").eq("account_id", accountId).eq("location_id", location.id).eq("tank_id", tank.id).gte("logged_at", startTs).lte("logged_at", endTs).order("logged_at", { ascending: true }),
+        supabase.from("expenses").select("id, name, amount, incurred_at, notes, category").eq("account_id", accountId).eq("location_id", location.id).eq("tank_id", tank.id).gte("incurred_at", startDate).lte("incurred_at", endDate).order("incurred_at", { ascending: true }),
+      ]);
+      const fData = (fRes as any).data || [];
+      const mData = (mRes as any).data || [];
+      const eData = (eRes as any).data || [];
+
+      const stockIds = Array.from(new Set([
+        ...fData.map((d: any) => d.stock_id).filter(Boolean),
+        ...mData.map((d: any) => d.stock_id).filter(Boolean),
+      ]));
+
+      const stocksMap = new Map<string, { name: string; unit?: string; category?: string; price_per_unit?: number }>();
+      if (stockIds.length) {
+        const { data: sData } = await supabase.from("stocks").select("id, name, unit, category, price_per_unit").eq("account_id", accountId).in("id", stockIds as any);
+        sData?.forEach((s: any) => stocksMap.set(s.id, { name: s.name, unit: s.unit || undefined, category: s.category || undefined, price_per_unit: Number(s.price_per_unit) || 0 }));
+        setStocks((sData || []).map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          unit: (s.unit || "kg") as any,
+          category: (s.category || "others") as any,
+          quantity: 0,
+          pricePerUnit: Number(s.price_per_unit) || 0,
+          totalAmount: 0,
+          minStock: 0,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        } as StockRecord)));
+      } else {
+        setStocks([]);
+      }
+
+      setFeedEntries(fData.map((d: any) => ({
+        schedule: d.schedule || "",
+        stockName: stocksMap.get(d.stock_id || "")?.name || "",
+        unit: (stocksMap.get(d.stock_id || "")?.unit || "kg") as any,
+        quantity: Number(d.quantity) || 0,
+        time: new Date(d.fed_at).toLocaleTimeString(),
+        createdAt: new Date(d.fed_at).toISOString(),
+      })));
+
+      setMaterialEntries(mData.map((d: any) => ({
+        tankId: tank.id,
+        stockId: d.stock_id || "",
+        stockName: stocksMap.get(d.stock_id || "")?.name || "",
+        category: (stocksMap.get(d.stock_id || "")?.category || "others") as any,
+        unit: (stocksMap.get(d.stock_id || "")?.unit || "kg") as any,
+        quantity: Number(d.quantity) || 0,
+        time: new Date(d.logged_at).toLocaleTimeString(),
+        createdAt: new Date(d.logged_at).toISOString(),
+        note: d.note || "",
+      })));
+
+      setExpenseEntries(eData.map((d: any) => ({
+        id: d.id,
+        category: d.category || "",
+        name: d.name || "",
+        amount: Number(d.amount) || 0,
+        date: d.incurred_at,
+        createdAt: new Date(d.incurred_at).toISOString(),
+      })));
+    };
+    load();
+  }, [accountId, location?.id, tank?.id, startDate, endDate]);
 
   // per-day aggregation
   const days: string[] = useMemo(() => {
@@ -188,12 +265,25 @@ const Reports = () => {
   const isManager = hasRole(["manager"]);
   const fmt = (n: number) => (isManager ? "—" : `₹ ${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`);
 
+  const statement = useMemo(() => {
+    const map = new Map<string, { feed: FeedingEntry[]; materials: MaterialLogEntry[]; expenses: ExpenseEntry[] }>();
+    const ensure = (d: string) => {
+      if (!map.has(d)) map.set(d, { feed: [], materials: [], expenses: [] });
+      return map.get(d)!;
+    };
+    feedEntries.forEach((e) => ensure(e.createdAt.slice(0,10)).feed.push(e));
+    materialEntries.forEach((m) => ensure(m.createdAt.slice(0,10)).materials.push(m));
+    expenseEntries.forEach((e) => ensure(e.date).expenses.push(e));
+    const dates = Array.from(map.keys()).sort();
+    return { map, dates };
+  }, [feedEntries, materialEntries, expenseEntries]);
+
   const rootRef = useRef<HTMLDivElement>(null);
   const exportPDF = async () => {
-    if (!rootRef.current) return;
-    // Ensure we're at the top and use high-res capture with CORS enabled
+    const target = statementRef.current || rootRef.current;
+    if (!target) return;
     window.scrollTo(0, 0);
-    const canvas = await html2canvas(rootRef.current, {
+    const canvas = await html2canvas(target, {
       scale: Math.min(2, window.devicePixelRatio || 1),
       useCORS: true,
       backgroundColor: "#ffffff",
@@ -201,7 +291,6 @@ const Reports = () => {
     });
     const imgData = canvas.toDataURL("image/png");
 
-    // Create multi-page PDF
     const pdf = new jsPDF({ orientation: "p", unit: "pt", format: "a4" });
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
@@ -212,11 +301,9 @@ const Reports = () => {
     let heightLeft = imgHeight;
     let position = margin;
 
-    // First page
     pdf.addImage(imgData, "PNG", margin, position, imgWidth, imgHeight);
     heightLeft -= pageHeight - margin * 2;
 
-    // Additional pages
     while (heightLeft > 0) {
       pdf.addPage();
       position = margin - (imgHeight - heightLeft);
@@ -224,7 +311,7 @@ const Reports = () => {
       heightLeft -= pageHeight - margin * 2;
     }
 
-    pdf.save(`report-${format(new Date(), "yyyyMMdd-HHmm")}.pdf`);
+    pdf.save(`tank-statement-${tank?.name || "report"}-${format(new Date(), "yyyyMMdd-HHmm")}.pdf`);
   };
 
   return (
@@ -265,6 +352,108 @@ const Reports = () => {
                 <p className="mt-3 text-xs text-muted-foreground">Formulas: Daily Feed (kg) = Initial Stocking × ABW × FR × SR / 1000. Biomass (kg) = Daily Feed (kg) ÷ FR(%). FCR = Cumulative Feed ÷ Biomass.</p>
               </CardContent>
             </Card>
+
+            <div ref={statementRef} id="tank-statement">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Tank Statement</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-sm space-y-1">
+                    <div><span className="font-medium">Tank:</span> {tank.name}</div>
+                    <div><span className="font-medium">Location:</span> {location.name}</div>
+                    <div><span className="font-medium">Period:</span> {startDate} to {endDate}</div>
+                  </div>
+                  {statement.dates.length === 0 ? (
+                    <p className="mt-3 text-sm text-muted-foreground">No activity in the selected period.</p>
+                  ) : (
+                    <div className="mt-4 space-y-6">
+                      {statement.dates.map((d) => {
+                        const day = statement.map.get(d)!;
+                        return (
+                          <div key={d} className="space-y-3">
+                            <div className="text-sm font-semibold">{d}</div>
+                            {day.feed.length > 0 && (
+                              <div>
+                                <div className="text-xs text-muted-foreground mb-1">Daily Feed</div>
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead>Time</TableHead>
+                                      <TableHead>Schedule</TableHead>
+                                      <TableHead>Feed</TableHead>
+                                      <TableHead>Qty</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {day.feed.map((e, i) => (
+                                      <TableRow key={i}>
+                                        <TableCell>{e.time}</TableCell>
+                                        <TableCell>{e.schedule}</TableCell>
+                                        <TableCell>{e.stockName}</TableCell>
+                                        <TableCell>{`${e.quantity} ${e.unit}`}</TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            )}
+                            {day.materials.length > 0 && (
+                              <div>
+                                <div className="text-xs text-muted-foreground mb-1">Materials Used</div>
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead>Time</TableHead>
+                                      <TableHead>Material</TableHead>
+                                      <TableHead>Qty</TableHead>
+                                      <TableHead>Unit</TableHead>
+                                      <TableHead>Notes</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {day.materials.map((m, i) => (
+                                      <TableRow key={i}>
+                                        <TableCell>{m.time}</TableCell>
+                                        <TableCell>{m.stockName}</TableCell>
+                                        <TableCell>{m.quantity}</TableCell>
+                                        <TableCell className="uppercase">{m.unit}</TableCell>
+                                        <TableCell>{m.note}</TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            )}
+                            {day.expenses.length > 0 && (
+                              <div>
+                                <div className="text-xs text-muted-foreground mb-1">Expenses</div>
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead>Name</TableHead>
+                                      <TableHead>Amount</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {day.expenses.map((e) => (
+                                      <TableRow key={e.id}>
+                                        <TableCell>{e.name}</TableCell>
+                                        <TableCell>{fmt(e.amount)}</TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
 
             <Card>
               <CardHeader><CardTitle>Feed per Day</CardTitle></CardHeader>
