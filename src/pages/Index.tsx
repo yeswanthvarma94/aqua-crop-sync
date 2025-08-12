@@ -4,6 +4,7 @@ import QuickActionsGrid from "@/components/QuickActionsGrid";
 import TabBar from "@/components/TabBar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatIST, nowIST } from "@/lib/time";
+import LanguageSelector from "@/components/LanguageSelector";
 
 const Index = () => {
   return (
@@ -14,7 +15,10 @@ const Index = () => {
             <h1 className="text-lg font-semibold">AquaLedger</h1>
             <p className="text-xs text-muted-foreground">{formatIST(nowIST(), "EEE, dd MMM yyyy • p zzz")}</p>
           </div>
-          <SyncBadge state="queued" />
+          <div className="flex items-center gap-2">
+            <LanguageSelector />
+            <SyncBadge state="queued" />
+          </div>
         </div>
         <div className="max-w-screen-md mx-auto px-4 pb-3">
           <HeaderPickers />
