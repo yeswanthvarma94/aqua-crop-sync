@@ -466,6 +466,30 @@ export type Database = {
           },
         ]
       }
+      usernames: {
+        Row: {
+          account_id: string
+          created_at: string
+          updated_at: string
+          user_id: string
+          username: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          updated_at?: string
+          user_id: string
+          username: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          updated_at?: string
+          user_id?: string
+          username?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
