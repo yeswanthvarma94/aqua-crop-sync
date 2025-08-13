@@ -79,6 +79,14 @@ const Settings = () => {
   const [plan, setPlan] = useState<Plan>(() => loadPlan());
   useEffect(() => { savePlan(plan); }, [plan]);
 
+  // Compute plan limits for UI
+  type PlanLimits = { team: boolean; locations: number | "Unlimited"; tanksPerLoc: number | "Unlimited" };
+  const limits: PlanLimits = useMemo(() => {
+    if (plan === "Enterprise") return { team: true, locations: "Unlimited", tanksPerLoc: "Unlimited" };
+    if (plan === "Pro") return { team: false, locations: 5, tanksPerLoc: 20 };
+    return { team: false, locations: 1, tanksPerLoc: 5 };
+  }, [plan]);
+
   // Theme
   const [darkMode, setDarkMode] = useState<boolean>(() => getStoredTheme() === "dark");
   useEffect(() => { applyTheme(darkMode ? "dark" : "light"); }, [darkMode]);
@@ -155,6 +163,32 @@ const Settings = () => {
     }
   };
 
+  // New: delete member (owner-only via RLS)
+  const handleDeleteUser = async (userId: string) => {
+    if (!accountId) return;
+    try {
+      const { error: memErr } = await supabase
+        .from("account_members")
+        .delete()
+        .eq("account_id", accountId)
+        .eq("user_id", userId);
+      if (memErr) throw memErr;
+
+      // Remove username mapping for this account (best effort)
+      const { error: nameErr } = await supabase
+        .from("usernames")
+        .delete()
+        .eq("account_id", accountId)
+        .eq("user_id", userId);
+      if (nameErr) throw nameErr;
+
+      await refreshTeam();
+      toast({ title: "Member deleted", description: "The member was removed from this account." });
+    } catch (e: any) {
+      toast({ title: "Failed to delete", description: e.message || "Error" });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur border-b">
@@ -205,7 +239,6 @@ const Settings = () => {
                 </Select>
               </div>
               <div className="space-y-1 text-sm">
-                
                 <div>Team access: <span className="font-medium">{limits.team ? "Enabled" : "Disabled"}</span></div>
                 <div>Locations: <span className="font-medium">{String(limits.locations)}</span></div>
                 <div>Tanks/location: <span className="font-medium">{String(limits.tanksPerLoc)}</span></div>
@@ -234,10 +267,6 @@ const Settings = () => {
                         <DialogTitle>Add team member</DialogTitle>
                       </DialogHeader>
                       <div className="grid gap-3">
-                        <div className="grid gap-2">
-                          <Label>Name</Label>
-                          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" />
-                        </div>
                         <div className="grid gap-2">
                           <Label>Username</Label>
                           <Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="username" />
@@ -284,18 +313,21 @@ const Settings = () => {
                         </TableRow>
                       ) : (
                         team.map((m) => (
-                          <TableRow key={m.id}>
-                            <TableCell className="font-medium">{m.name}</TableCell>
+                          <TableRow key={m.user_id}>
+                            <TableCell className="font-medium">—</TableCell>
                             <TableCell>{m.username}</TableCell>
                             <TableCell className="uppercase"><Badge variant="secondary">{m.role}</Badge></TableCell>
                             <TableCell className="text-right space-x-2">
-                              <Dialog open={resetTarget?.id === m.id} onOpenChange={(v) => { if (!v) { setResetTarget(null); setPassword(""); } }}>
+                              <Dialog
+                                open={resetTarget?.user_id === m.user_id}
+                                onOpenChange={(v) => { if (!v) { setResetTarget(null); setPassword(""); } }}
+                              >
                                 <DialogTrigger asChild>
                                   <Button size="sm" variant="secondary" onClick={() => setResetTarget(m)}>Reset Password</Button>
                                 </DialogTrigger>
                                 <DialogContent className="sm:max-w-[420px]">
                                   <DialogHeader>
-                                    <DialogTitle>Reset password — {m.name}</DialogTitle>
+                                    <DialogTitle>Reset password — {m.username}</DialogTitle>
                                   </DialogHeader>
                                   <div className="grid gap-2">
                                     <Label>New password</Label>
@@ -306,7 +338,7 @@ const Settings = () => {
                                   </DialogFooter>
                                 </DialogContent>
                               </Dialog>
-                              <Button size="sm" variant="destructive" onClick={() => handleDeleteUser(m.id)}>Delete</Button>
+                              <Button size="sm" variant="destructive" onClick={() => handleDeleteUser(m.user_id)}>Delete</Button>
                             </TableCell>
                           </TableRow>
                         ))
@@ -339,7 +371,6 @@ const Settings = () => {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               <div className="rounded-md border p-3">
-                
                 <div className="flex items-center justify-between"><span>Local storage usage</span><span className="font-medium">{storageKB} KB</span></div>
                 <div className="flex items-center justify-between"><span>Keys</span><span className="font-medium">{localStorage.length}</span></div>
               </div>
