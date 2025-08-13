@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/state/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { cleanupAuthState } from "@/lib/authCleanup";
 import { Mail, Phone, Eye, EyeOff, Loader2, LogIn, ChevronRight } from "lucide-react";
 import { useNavigate, Link } from "react-router-dom";
 const useSEO = (title: string, description: string) => {
@@ -60,15 +61,28 @@ const Auth = () => {
     try {
       const value = identifier.trim();
       if (!value || !password) throw new Error("Enter credentials");
+
+      // Clean any stale auth before signing in
+      cleanupAuthState();
+      try { await supabase.auth.signOut({ scope: "global" } as any); } catch {}
+
       if (mode === "email") {
-        const { error } = await supabase.auth.signInWithPassword({ email: value, password });
-        if (error) throw error;
+        if (/@/.test(value)) {
+          const { error } = await supabase.auth.signInWithPassword({ email: value, password });
+          if (error) throw error;
+        } else {
+          // Treat as username handle
+          const aliasEmail = `${value.toLowerCase()}@users.aqualedger.local`;
+          const { error } = await supabase.auth.signInWithPassword({ email: aliasEmail, password });
+          if (error) throw error;
+        }
       } else {
         const { error } = await supabase.auth.signInWithPassword({ phone: value as any, password } as any);
         if (error) throw error;
       }
-      toast({ title: "Signed in", description: "Welcome back!" });
-      setIdentifier(""); setPassword("");
+
+      // Hard refresh to ensure clean state
+      window.location.href = "/";
     } catch (e: any) {
       toast({ title: "Login failed", description: e.message });
     } finally {

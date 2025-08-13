@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/state/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 import { useEffect, useMemo, useState } from "react";
 
@@ -51,26 +52,11 @@ const applyTheme = (theme: "light" | "dark") => {
 
 // Team
 type UserRole = "owner" | "manager" | "partner";
-interface TeamUser {
-  id: string;
+interface TeamRow {
+  user_id: string;
   username: string;
-  name: string;
   role: UserRole;
-  passwordHash: string;
-  createdAt: string;
-}
-const TEAM_KEY = "team.users";
-const loadTeam = (): TeamUser[] => {
-  try { const raw = localStorage.getItem(TEAM_KEY); return raw ? (JSON.parse(raw) as TeamUser[]) : []; } catch { return []; }
-};
-const saveTeam = (list: TeamUser[]) => localStorage.setItem(TEAM_KEY, JSON.stringify(list));
-
-async function hashPassword(pw: string): Promise<string> {
-  if (!window.crypto?.subtle) return btoa(unescape(encodeURIComponent(pw)));
-  const enc = new TextEncoder().encode(pw);
-  const buf = await crypto.subtle.digest("SHA-256", enc);
-  const arr = Array.from(new Uint8Array(buf));
-  return arr.map((b) => b.toString(16).padStart(2, "0")).join("");
+  created_at: string;
 }
 
 // Diagnostics helpers
@@ -86,7 +72,7 @@ const bytesForLocalStorage = (): number => {
 
 const Settings = () => {
   useSEO("Settings | AquaLedger", "Manage profile, plan, team access, theme, and diagnostics.");
-  const { user, signInDev, signOut, isDevLoginEnabled } = useAuth();
+  const { user, accountId, signInDev, signOut, isDevLoginEnabled } = useAuth();
   const { toast } = useToast();
 
   // Plan
@@ -97,58 +83,76 @@ const Settings = () => {
   const [darkMode, setDarkMode] = useState<boolean>(() => getStoredTheme() === "dark");
   useEffect(() => { applyTheme(darkMode ? "dark" : "light"); }, [darkMode]);
 
-  // Team state
-  const [team, setTeam] = useState<TeamUser[]>(() => loadTeam());
-  const [addOpen, setAddOpen] = useState(false);
-  const [resetTarget, setResetTarget] = useState<TeamUser | null>(null);
+  // Diagnostics
+  const storageBytes = bytesForLocalStorage();
+  const storageKB = Math.round(storageBytes / 1024);
 
-  const [name, setName] = useState("");
+  // Team state
+  const [team, setTeam] = useState<TeamRow[]>([]);
+  const [memberCount, setMemberCount] = useState<number>(0);
+  const [addOpen, setAddOpen] = useState(false);
+  const [resetTarget, setResetTarget] = useState<TeamRow | null>(null);
+
   const [username, setUsername] = useState("");
   const [role, setRole] = useState<UserRole>("manager");
   const [password, setPassword] = useState("");
 
   const isOwner = user?.role === "owner";
-  const canManageTeam = isOwner && plan === "Enterprise";
+  const canManageTeam = isOwner;
 
-  const limits = useMemo(() => {
-    switch (plan) {
-      case "Enterprise": return { approvals: true, team: true, locations: "Unlimited", tanksPerLoc: "Unlimited" };
-      case "Pro": return { approvals: true, team: false, locations: 5, tanksPerLoc: 20 } as const;
-      default: return { approvals: false, team: false, locations: 2, tanksPerLoc: 10 } as const;
-    }
-  }, [plan]);
+  const refreshTeam = async () => {
+    if (!accountId) return;
+    const { data: members } = await supabase
+      .from("account_members")
+      .select("user_id, role, created_at")
+      .eq("account_id", accountId);
+    const { data: names } = await supabase
+      .from("usernames")
+      .select("user_id, username")
+      .eq("account_id", accountId);
+    const map = new Map((names || []).map((n: any) => [n.user_id as string, n.username as string]));
+    const rows: TeamRow[] = (members || []).map((m: any) => ({
+      user_id: m.user_id as string,
+      username: map.get(m.user_id as string) || "—",
+      role: m.role as UserRole,
+      created_at: m.created_at as string,
+    }));
+    setTeam(rows);
+    setMemberCount(new Set((members || []).map((m: any) => m.user_id)).size);
+  };
 
-  // Fetch pending approvals count asynchronously
-
-  const storageBytes = bytesForLocalStorage();
-  const storageKB = Math.round(storageBytes / 1024);
+  useEffect(() => { refreshTeam(); }, [accountId]);
 
   const handleAddUser = async () => {
     const u = username.trim().toLowerCase();
-    const n = name.trim();
-    if (!u || !n || !password) { toast({ title: "Missing fields", description: "Fill all fields to add a user." }); return; }
-    if (team.some(t => t.username === u)) { toast({ title: "Username taken", description: "Choose a different username." }); return; }
-    const hash = await hashPassword(password);
-    const created: TeamUser = { id: crypto.randomUUID(), username: u, name: n, role, passwordHash: hash, createdAt: new Date().toISOString() };
-    const next = [created, ...team];
-    setTeam(next); saveTeam(next);
-    setAddOpen(false); setName(""); setUsername(""); setPassword(""); setRole("manager");
-    toast({ title: "Team member added", description: `${n} — ${role}` });
-  };
-
-  const handleDeleteUser = (id: string) => {
-    const next = team.filter(t => t.id !== id);
-    setTeam(next); saveTeam(next);
-    toast({ title: "Removed", description: "Team member deleted." });
+    if (!u || !password) { toast({ title: "Missing fields", description: "Enter username and password." }); return; }
+    if (!accountId) { toast({ title: "No account", description: "Account not ready." }); return; }
+    try {
+      const { data, error } = await supabase.functions.invoke("team-create-user", {
+        body: { accountId, username: u, password, role },
+      });
+      if (error) throw error;
+      setAddOpen(false); setUsername(""); setPassword(""); setRole("manager");
+      await refreshTeam();
+      toast({ title: "Member added", description: `${u} — ${role}` });
+    } catch (e: any) {
+      toast({ title: "Failed to add", description: e.message || "Error" });
+    }
   };
 
   const handleResetPassword = async () => {
     if (!resetTarget || !password) return;
-    const hash = await hashPassword(password);
-    const next = team.map(t => t.id === resetTarget.id ? { ...t, passwordHash: hash } : t);
-    setTeam(next); saveTeam(next);
-    setResetTarget(null); setPassword("");
-    toast({ title: "Password updated", description: `Password reset for ${resetTarget.name}` });
+    if (!accountId) return;
+    try {
+      const { error } = await supabase.functions.invoke("team-reset-password", {
+        body: { accountId, username: resetTarget.username, newPassword: password },
+      } as any);
+      if (error) throw error;
+      setResetTarget(null); setPassword("");
+      toast({ title: "Password updated", description: `Password reset for ${resetTarget.username}` });
+    } catch (e: any) {
+      toast({ title: "Failed to reset", description: e.message || "Error" });
+    }
   };
 
   return (

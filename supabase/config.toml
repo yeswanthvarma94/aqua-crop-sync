@@ -1,1 +1,7 @@
 project_id = "ubgwfioejghmfrlyrumf"
+
+[functions.team-create-user]
+verify_jwt = true
+
+[functions.team-reset-password]
+verify_jwt = true
