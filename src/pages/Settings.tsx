@@ -80,11 +80,29 @@ const Settings = () => {
   useEffect(() => { savePlan(plan); }, [plan]);
 
   // Compute plan limits for UI
-  type PlanLimits = { team: boolean; locations: number | "Unlimited"; tanksPerLoc: number | "Unlimited" };
+  type PlanLimits = { team: boolean; locations: number | "Unlimited"; tanksPerLoc: number | "Unlimited"; price: string; originalPrice: string };
   const limits: PlanLimits = useMemo(() => {
-    if (plan === "Enterprise") return { team: true, locations: "Unlimited", tanksPerLoc: "Unlimited" };
-    if (plan === "Pro") return { team: false, locations: 5, tanksPerLoc: 20 };
-    return { team: false, locations: 1, tanksPerLoc: 5 };
+    if (plan === "Enterprise") return { 
+      team: true, 
+      locations: "Unlimited", 
+      tanksPerLoc: "Unlimited",
+      price: "₹2,999/Year",
+      originalPrice: "₹5,999/Year"
+    };
+    if (plan === "Pro") return { 
+      team: false, 
+      locations: 3, 
+      tanksPerLoc: 4,
+      price: "₹599/Year", 
+      originalPrice: "₹999/Year"
+    };
+    return { 
+      team: false, 
+      locations: 1, 
+      tanksPerLoc: 2,
+      price: "₹0/Year",
+      originalPrice: "₹199/Year"
+    };
   }, [plan]);
 
   // Theme
@@ -221,28 +239,78 @@ const Settings = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle>Subscription plan & limits</CardTitle>
+            <CardTitle>Choose Your Plan</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Plan</Label>
-                <Select value={plan} onValueChange={(v) => setPlan(v as Plan)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select plan" />
-                  </SelectTrigger>
-                  <SelectContent className="z-50 bg-popover">
-                    <SelectItem value="Free">Free</SelectItem>
-                    <SelectItem value="Pro">Pro</SelectItem>
-                    <SelectItem value="Enterprise">Enterprise</SelectItem>
-                  </SelectContent>
-                </Select>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Free Plan */}
+              <div className={`border rounded-lg p-4 cursor-pointer transition-all ${plan === 'Free' ? 'border-primary bg-primary/5' : 'border-border'}`} 
+                   onClick={() => setPlan('Free')}>
+                <div className="space-y-3">
+                  <div className="text-center">
+                    <h3 className="font-semibold text-lg">Free</h3>
+                    <div className="space-y-1">
+                      <div className="text-2xl font-bold">₹0/Year</div>
+                      <div className="text-sm text-muted-foreground line-through">₹199/Year</div>
+                    </div>
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    <div>• 1 Location</div>
+                    <div>• 2 Tanks per location</div>
+                    <div>• All features included</div>
+                    <div className="text-muted-foreground">• No team access</div>
+                  </div>
+                </div>
               </div>
-              <div className="space-y-1 text-sm">
-                <div>Team access: <span className="font-medium">{limits.team ? "Enabled" : "Disabled"}</span></div>
-                <div>Locations: <span className="font-medium">{String(limits.locations)}</span></div>
-                <div>Tanks/location: <span className="font-medium">{String(limits.tanksPerLoc)}</span></div>
+
+              {/* Pro Plan */}
+              <div className={`border rounded-lg p-4 cursor-pointer transition-all ${plan === 'Pro' ? 'border-primary bg-primary/5' : 'border-border'}`} 
+                   onClick={() => setPlan('Pro')}>
+                <div className="space-y-3">
+                  <div className="text-center">
+                    <h3 className="font-semibold text-lg">Pro</h3>
+                    <div className="space-y-1">
+                      <div className="text-2xl font-bold">₹599/Year</div>
+                      <div className="text-sm text-muted-foreground line-through">₹999/Year</div>
+                    </div>
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    <div>• 3 Locations</div>
+                    <div>• 4 Tanks per location</div>
+                    <div>• All features included</div>
+                    <div className="text-muted-foreground">• No team access</div>
+                  </div>
+                </div>
               </div>
+
+              {/* Enterprise Plan */}
+              <div className={`border rounded-lg p-4 cursor-pointer transition-all ${plan === 'Enterprise' ? 'border-primary bg-primary/5' : 'border-border'}`} 
+                   onClick={() => setPlan('Enterprise')}>
+                <div className="space-y-3">
+                  <div className="text-center">
+                    <h3 className="font-semibold text-lg">Enterprise</h3>
+                    <div className="space-y-1">
+                      <div className="text-2xl font-bold">₹2,999/Year</div>
+                      <div className="text-sm text-muted-foreground line-through">₹5,999/Year</div>
+                    </div>
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    <div>• Unlimited Locations</div>
+                    <div>• Unlimited Tanks</div>
+                    <div>• All features included</div>
+                    <div>• Team access (User roles)</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="text-center">
+              <Button size="lg" className="bg-gradient-to-r from-primary to-primary/80">
+                Upgrade Plan - Secure Payment via Razorpay
+              </Button>
+              <p className="text-sm text-muted-foreground mt-2">
+                Secure transactions in Indian Rupees (₹)
+              </p>
             </div>
           </CardContent>
         </Card>

@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/state/AuthContext";
+import { loadPlan, checkTankLimit } from "@/lib/subscription";
 
 interface Tank { id: string; locationId: string; name: string; type: "shrimp" | "fish" }
 
@@ -121,7 +122,21 @@ const Tanks = () => {
 
   const isValid = formName.trim().length > 0;
   const onCreateTank = async () => {
-    if (!locationId || !isValid) return;
+    if (!locationId || !isValid || !accountId) return;
+    
+    // Check tank limit
+    const plan = loadPlan();
+    const limitCheck = await checkTankLimit(accountId, locationId, plan);
+    
+    if (!limitCheck.canCreate) {
+      toast({
+        title: "Plan Limit Reached",
+        description: limitCheck.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
     const id = crypto.randomUUID();
     const name = formName.trim();
     try {

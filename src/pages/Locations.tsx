@@ -14,6 +14,7 @@ import { useSelection } from "@/state/SelectionContext";
 import { useAuth } from "@/state/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { loadPlan, checkLocationLimit } from "@/lib/subscription";
 
 interface Location {
   id: string;
@@ -89,6 +90,19 @@ const Locations = () => {
         if (error) throw error;
         toast({ title: "Updated" });
       } else {
+        // Check location limit for new location
+        const plan = loadPlan();
+        const limitCheck = await checkLocationLimit(accountId, plan);
+        
+        if (!limitCheck.canCreate) {
+          toast({
+            title: "Plan Limit Reached",
+            description: limitCheck.message,
+            variant: "destructive",
+          });
+          return;
+        }
+
         const newLoc: Location = {
           id: crypto.randomUUID(),
           name: form.name.trim(),
