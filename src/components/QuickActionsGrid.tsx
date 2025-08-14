@@ -44,16 +44,24 @@ const QuickActionsGrid = () => {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Quick Actions</CardTitle>
+    <Card className="glass-card shadow-card">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <div className="w-2 h-2 rounded-full bg-accent animate-pulse"></div>
+          Quick Actions
+        </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+        <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
           {items.map(({ key, label, icon: Icon }) => (
-            <Button key={key} variant="secondary" className="h-20 flex flex-col items-center justify-center gap-2" onClick={() => handleNav(key)}>
-              <Icon size={18} />
-              <span className="text-xs">{label}</span>
+            <Button 
+              key={key} 
+              variant="secondary" 
+              className="h-20 flex flex-col items-center justify-center gap-2 interactive-hover bg-secondary/50 hover:bg-secondary/80 border border-border/30" 
+              onClick={() => handleNav(key)}
+            >
+              <Icon size={20} className="text-primary" />
+              <span className="text-xs font-medium">{label}</span>
             </Button>
           ))}
         </div>

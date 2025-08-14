@@ -9,43 +9,81 @@ import LanguageSelector from "@/components/LanguageSelector";
 const Index = () => {
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-10 bg-background/90 backdrop-blur border-b">
-        <div className="max-w-screen-md mx-auto px-4 py-3 flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-semibold">AquaLedger</h1>
-            <p className="text-xs text-muted-foreground">{formatIST(nowIST(), "EEE, dd MMM yyyy • p zzz")}</p>
+      <header className="sticky top-0 z-10 glass-header">
+        <div className="max-w-screen-md mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="animate-fade-in">
+            <h1 className="text-xl font-bold text-gradient">AquaLedger</h1>
+            <p className="text-xs text-muted-foreground">
+              {formatIST(nowIST(), "EEE, dd MMM yyyy • p zzz")}
+            </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3 animate-fade-in">
             <LanguageSelector />
             <SyncBadge state="queued" />
           </div>
         </div>
-        <div className="max-w-screen-md mx-auto px-4 pb-3">
+        <div className="max-w-screen-md mx-auto px-4 pb-4">
           <HeaderPickers />
         </div>
       </header>
 
-      <main className="max-w-screen-md mx-auto px-4 pb-24 pt-4 space-y-4">
-        {/* Today summary */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Today at a glance</CardTitle>
+      <main className="max-w-screen-md mx-auto px-4 pb-24 pt-6 space-y-6">
+        {/* Today summary - Hero card */}
+        <Card className="glass-card animate-slide-up shadow-elegant">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <div className="w-2 h-2 rounded-full bg-gradient-primary"></div>
+              Today at a glance
+            </CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
-            Feed due vs given, materials used, today's expenses, low-stock
+            <div className="grid grid-cols-2 gap-4 mt-2">
+              <div className="space-y-1">
+                <p className="font-medium text-foreground">Feed Status</p>
+                <p>3 tanks due, 2 completed</p>
+              </div>
+              <div className="space-y-1">
+                <p className="font-medium text-foreground">Expenses</p>
+                <p>₹2,450 spent today</p>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
         {/* Quick actions */}
-        <QuickActionsGrid />
+        <div className="animate-bounce-in">
+          <QuickActionsGrid />
+        </div>
 
-        {/* Recent activity placeholder */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent activity</CardTitle>
+        {/* Recent activity */}
+        <Card className="glass-card animate-slide-up shadow-card">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <div className="w-2 h-2 rounded-full bg-accent animate-pulse"></div>
+              Recent activity
+            </CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
-            Last 10 events will appear here.
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-secondary/30 transition-colors">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                  <div className="w-3 h-3 rounded-full bg-primary"></div>
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium text-foreground">Tank A1 fed</p>
+                  <p className="text-xs">2 hours ago</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 p-3 rounded-lg hover:bg-secondary/20 transition-colors">
+                <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center">
+                  <div className="w-3 h-3 rounded-full bg-accent"></div>
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium text-foreground">Material purchased</p>
+                  <p className="text-xs">4 hours ago</p>
+                </div>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </main>

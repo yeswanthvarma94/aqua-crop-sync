@@ -16,13 +16,19 @@ const TabBar = () => {
   ];
   const gridCols = "grid-cols-5";
   return (
-    <nav className="fixed bottom-0 inset-x-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-t">
-      <ul className={`grid ${gridCols} max-w-screen-md mx-auto py-2`}>
+    <nav className="fixed bottom-0 inset-x-0 glass-header border-t">
+      <ul className={`grid ${gridCols} max-w-screen-md mx-auto py-3`}>
         {items.map(({ to, label, icon: Icon }) => (
-          <li key={to} className="">
-            <NavLink to={to} end className={({ isActive }) => `${itemBase} ${isActive ? itemActive : itemInactive}`}>
+          <li key={to}>
+            <NavLink 
+              to={to} 
+              end 
+              className={({ isActive }) => 
+                `${itemBase} ${isActive ? itemActive : itemInactive} transition-all duration-200 hover:scale-105 px-2 py-1 rounded-lg ${isActive ? 'bg-primary/10' : 'hover:bg-secondary/50'}`
+              }
+            >
               <Icon size={20} />
-              <span>{label}</span>
+              <span className="font-medium">{label}</span>
             </NavLink>
           </li>
         ))}
