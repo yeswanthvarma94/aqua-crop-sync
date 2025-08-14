@@ -12,6 +12,13 @@ export const loadPlan = (): Plan => {
 
 export const savePlan = (p: Plan) => localStorage.setItem(PLAN_KEY, p);
 
+// Initialize new users with Free plan
+export const initializeFreePlan = () => {
+  if (!localStorage.getItem(PLAN_KEY)) {
+    savePlan("Free");
+  }
+};
+
 export const getPlanLimits = (plan: Plan) => {
   switch (plan) {
     case "Enterprise":

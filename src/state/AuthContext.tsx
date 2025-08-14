@@ -4,6 +4,7 @@ import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/integrations/supabase/client";
 import { ensureDefaultAccount, getMembershipRole, getActiveAccountId, setActiveAccountId } from "@/lib/account";
 import { cleanupAuthState } from "@/lib/authCleanup";
+import { initializeFreePlan } from "@/lib/subscription";
 
 export type UserRole = "owner" | "manager" | "partner";
 export type UserStatus = "active" | "disabled";
@@ -67,6 +68,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
         setUser(mapped);
 
+        // Initialize Free plan for new users
+        initializeFreePlan();
+        
         // Defer backend calls to avoid deadlocks
         setTimeout(async () => {
           try {
@@ -102,6 +106,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           status: "active",
         };
         setUser(mapped);
+        // Initialize Free plan for new users
+        initializeFreePlan();
+        
         // Defer follow-up
         setTimeout(async () => {
           try {
