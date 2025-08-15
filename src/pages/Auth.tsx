@@ -32,16 +32,18 @@ const Auth = () => {
   const { signInDev, isDevLoginEnabled, signInLocal } = useAuth();
   const navigate = useNavigate();
 
-  // Email/Mobile
+  // Login modes
+  const [loginType, setLoginType] = useState<"credentials" | "username">("credentials");
   const [mode, setMode] = useState<"email" | "mobile">("email");
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
-  // Username (kept for logic, hidden in UI)
-  const [uname, setUname] = useState("");
-  const [upass, setUpass] = useState("");
+  // Username login (for team members)
+  const [username, setUsername] = useState("");
+  const [userPassword, setUserPassword] = useState("");
 
   const googleLogin = async () => {
     try {
@@ -91,14 +93,27 @@ const Auth = () => {
   };
 
   const usernameLogin = async () => {
-    const u = uname.trim();
-    if (!u || !upass) { toast({ title: "Missing fields", description: "Enter username and password" }); return; }
-    const res = await signInLocal(u, upass);
-    if (res.ok) {
-      toast({ title: "Signed in", description: `Welcome ${u}` });
-      setUname(""); setUpass("");
-    } else {
-      toast({ title: "Login failed", description: res.message || "Invalid credentials" });
+    setLoading(true);
+    try {
+      const u = username.trim();
+      if (!u || !userPassword) {
+        toast({ title: "Missing fields", description: "Enter username and password" });
+        return;
+      }
+      
+      const res = await signInLocal(u, userPassword);
+      if (res.ok) {
+        toast({ title: "Signed in", description: `Welcome ${u}` });
+        setUsername("");
+        setUserPassword("");
+        window.location.href = "/";
+      } else {
+        toast({ title: "Login failed", description: res.message || "Invalid credentials" });
+      }
+    } catch (e: any) {
+      toast({ title: "Login failed", description: e.message });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -141,66 +156,143 @@ const Auth = () => {
 
         <Card>
           <CardContent className="pt-6 space-y-4">
-            <Tabs value={mode} onValueChange={(v) => setMode(v as "email" | "mobile")}>
+            <Tabs value={loginType} onValueChange={(v) => setLoginType(v as "credentials" | "username")}>
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="email" className="flex items-center gap-2">
-                  <Mail className="h-4 w-4" /> Email
-                </TabsTrigger>
-                <TabsTrigger value="mobile" className="flex items-center gap-2">
-                  <Phone className="h-4 w-4" /> Mobile
-                </TabsTrigger>
+                <TabsTrigger value="credentials">Email/Mobile</TabsTrigger>
+                <TabsTrigger value="username">Username</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="email" className="space-y-3">
+              <TabsContent value="credentials" className="space-y-4">
+                <Tabs value={mode} onValueChange={(v) => setMode(v as "email" | "mobile")}>
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="email" className="flex items-center gap-2">
+                      <Mail className="h-4 w-4" /> Email
+                    </TabsTrigger>
+                    <TabsTrigger value="mobile" className="flex items-center gap-2">
+                      <Phone className="h-4 w-4" /> Mobile
+                    </TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="email" className="space-y-3">
+                    <div className="grid gap-2">
+                      <Label>Email address</Label>
+                      <Input
+                        type="email"
+                        placeholder="you@example.com"
+                        value={identifier}
+                        onChange={(e) => setIdentifier(e.target.value)}
+                      />
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="mobile" className="space-y-3">
+                    <div className="grid gap-2">
+                      <Label>Mobile number</Label>
+                      <Input
+                        type="tel"
+                        inputMode="tel"
+                        placeholder="e.g. +15551234567"
+                        value={identifier}
+                        onChange={(e) => setIdentifier(e.target.value)}
+                      />
+                    </div>
+                  </TabsContent>
+                </Tabs>
+
                 <div className="grid gap-2">
-                  <Label>Email address</Label>
-                  <Input
-                    type="email"
-                    placeholder="you@example.com"
-                    value={identifier}
-                    onChange={(e) => setIdentifier(e.target.value)}
-                  />
+                  <div className="flex items-center justify-between">
+                    <Label>Password</Label>
+                    <button
+                      type="button"
+                      className="text-xs text-primary hover:underline"
+                      onClick={() => setShowForgotPassword(!showForgotPassword)}
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && emailOrPhoneLogin()}
+                    />
+                    <button
+                      type="button"
+                      className="absolute inset-y-0 right-2 flex items-center px-2 text-muted-foreground"
+                      onClick={() => setShowPassword((s) => !s)}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
+
+                {showForgotPassword && (
+                  <div className="p-3 bg-muted rounded-lg space-y-2">
+                    <p className="text-sm text-muted-foreground">
+                      Enter your email address to receive a password reset link.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={forgotPassword}
+                      disabled={!identifier.includes('@')}
+                    >
+                      Send reset link
+                    </Button>
+                  </div>
+                )}
+
+                <Button className="w-full" onClick={emailOrPhoneLogin} disabled={loading}>
+                  {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <LogIn className="h-4 w-4 mr-2" />}
+                  {mode === "email" ? "Sign in with Email" : "Sign in with Mobile"}
+                </Button>
               </TabsContent>
 
-              <TabsContent value="mobile" className="space-y-3">
+              <TabsContent value="username" className="space-y-4">
                 <div className="grid gap-2">
-                  <Label>Mobile</Label>
+                  <Label>Username</Label>
                   <Input
-                    type="tel"
-                    inputMode="tel"
-                    placeholder="e.g. +15551234567"
-                    value={identifier}
-                    onChange={(e) => setIdentifier(e.target.value)}
+                    type="text"
+                    placeholder="Enter your username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
                   />
                 </div>
+
+                <div className="grid gap-2">
+                  <Label>Password</Label>
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="••••••••"
+                      value={userPassword}
+                      onChange={(e) => setUserPassword(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && usernameLogin()}
+                    />
+                    <button
+                      type="button"
+                      className="absolute inset-y-0 right-2 flex items-center px-2 text-muted-foreground"
+                      onClick={() => setShowPassword((s) => !s)}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <Button className="w-full" onClick={usernameLogin} disabled={loading}>
+                  {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <LogIn className="h-4 w-4 mr-2" />}
+                  Sign in with Username
+                </Button>
+
+                <p className="text-xs text-muted-foreground text-center">
+                  Username accounts are created by the system administrator.
+                </p>
               </TabsContent>
             </Tabs>
-
-            <div className="grid gap-2">
-              <Label>Password</Label>
-              <div className="relative">
-                <Input
-                  type={showPassword ? "text" : "password"}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-                <button
-                  type="button"
-                  className="absolute inset-y-0 right-2 flex items-center px-2 text-muted-foreground"
-                  onClick={() => setShowPassword((s) => !s)}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
-
-            <Button className="w-full" onClick={emailOrPhoneLogin} disabled={loading}>
-              {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <LogIn className="h-4 w-4 mr-2" />}
-              {mode === "email" ? "Sign in with Email" : "Sign in with Mobile"}
-            </Button>
 
             <div className="text-center">
               <button
