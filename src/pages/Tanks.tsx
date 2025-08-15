@@ -8,6 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { CalendarIcon } from "lucide-react";
+import { format } from "date-fns";
 import { useSelection } from "@/state/SelectionContext";
 import { cropDayFromStartIST, nowIST } from "@/lib/time";
 import { useToast } from "@/hooks/use-toast";
@@ -46,6 +50,11 @@ const Tanks = () => {
   const [open, setOpen] = useState(false);
   const [formName, setFormName] = useState("");
   const [formType, setFormType] = useState<"shrimp" | "fish">("fish");
+  const [formSeedDate, setFormSeedDate] = useState<Date | undefined>();
+  const [formSeedWeight, setFormSeedWeight] = useState("");
+  const [formTotalSeed, setFormTotalSeed] = useState("");
+  const [formArea, setFormArea] = useState("");
+  const [formPrice, setFormPrice] = useState("");
   const [tanksAll, setTanksAll] = useState<Tank[]>([]);
   const { toast } = useToast();
   const [rev, setRev] = useState(0);
@@ -141,13 +150,44 @@ const Tanks = () => {
     const name = formName.trim();
     try {
       const { error } = await supabase.from("tanks").insert([
-        { id, account_id: accountId, location_id: locationId, name, type: formType },
+        { 
+          id, 
+          account_id: accountId, 
+          location_id: locationId, 
+          name, 
+          type: formType,
+          seed_date: formSeedDate?.toISOString().slice(0, 10),
+          seed_weight: formSeedWeight ? parseFloat(formSeedWeight) : null,
+          total_seed: formTotalSeed ? parseInt(formTotalSeed) : null,
+          area: formArea ? parseFloat(formArea) : null,
+          price: formPrice ? parseFloat(formPrice) : null
+        },
       ]);
       if (error) throw error;
+      
+      // If seed date is provided, also create a crop entry
+      if (formSeedDate) {
+        await supabase.from("tank_crops").insert([
+          { 
+            account_id: accountId, 
+            tank_id: id, 
+            seed_date: formSeedDate.toISOString().slice(0, 10), 
+            end_date: null 
+          },
+        ]);
+      }
+      
       setOpen(false);
+      // Reset all form fields
       setFormName("");
       setFormType("fish");
-      toast({ title: "Created", description: name });
+      setFormSeedDate(undefined);
+      setFormSeedWeight("");
+      setFormTotalSeed("");
+      setFormArea("");
+      setFormPrice("");
+      
+      toast({ title: "Tank Created", description: `${name} has been added successfully` });
       setRev((r) => r + 1);
     } catch (e) {
       toast({ title: "Error", description: "Failed to create tank.", variant: "destructive" });
@@ -197,31 +237,108 @@ const Tanks = () => {
             <DialogTrigger asChild>
               <Button size="sm">Add Tank</Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Add Tank</DialogTitle>
+                <DialogTitle className="text-lg font-semibold">Details</DialogTitle>
               </DialogHeader>
-              <div className="grid gap-4 py-2">
-                <div className="grid gap-2">
-                  <Label htmlFor="tankName">Name</Label>
-                  <Input id="tankName" value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="e.g., Tank 1" />
+              <div className="grid gap-6 py-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="tankName">Tank Name</Label>
+                    <Input 
+                      id="tankName" 
+                      value={formName} 
+                      onChange={(e) => setFormName(e.target.value)} 
+                      placeholder="Enter tank name" 
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="tankType">Tank Type</Label>
+                    <Select value={formType} onValueChange={(v) => setFormType(v as "fish" | "shrimp")}>
+                      <SelectTrigger id="tankType">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="fish">Fish</SelectItem>
+                        <SelectItem value="shrimp">Shrimp</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label>Seed Date</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className="justify-start text-left font-normal">
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {formSeedDate ? format(formSeedDate, "PPP") : "Pick a date"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={formSeedDate}
+                          onSelect={setFormSeedDate}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="seedWeight">Seed weight (g)</Label>
+                    <Input 
+                      id="seedWeight" 
+                      type="number"
+                      step="0.1"
+                      value={formSeedWeight} 
+                      onChange={(e) => setFormSeedWeight(e.target.value)} 
+                      placeholder="e.g. 2" 
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="totalSeed">Total seed</Label>
+                    <Input 
+                      id="totalSeed" 
+                      type="number"
+                      value={formTotalSeed} 
+                      onChange={(e) => setFormTotalSeed(e.target.value)} 
+                      placeholder="e.g. 5000" 
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="area">Area (acres)</Label>
+                    <Input 
+                      id="area" 
+                      type="number"
+                      step="0.01"
+                      value={formArea} 
+                      onChange={(e) => setFormArea(e.target.value)} 
+                      placeholder="e.g. 1.50" 
+                    />
+                  </div>
+                </div>
+
                 <div className="grid gap-2">
-                  <Label htmlFor="tankType">Type</Label>
-                  <Select value={formType} onValueChange={(v) => setFormType(v as "fish" | "shrimp") }>
-                    <SelectTrigger id="tankType">
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="fish">Fish</SelectItem>
-                      <SelectItem value="shrimp">Shrimp</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="price">Price</Label>
+                  <Input 
+                    id="price" 
+                    type="number"
+                    step="0.01"
+                    value={formPrice} 
+                    onChange={(e) => setFormPrice(e.target.value)} 
+                    placeholder="e.g. 25000" 
+                  />
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
-                <Button onClick={onCreateTank} disabled={!isValid}>Create</Button>
+                <Button onClick={onCreateTank} disabled={!isValid} className="bg-cyan-500 hover:bg-cyan-600 text-white">
+                  Save
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
