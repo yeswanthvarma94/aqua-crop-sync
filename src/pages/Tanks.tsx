@@ -55,6 +55,7 @@ const Tanks = () => {
   const [formTotalSeed, setFormTotalSeed] = useState("");
   const [formArea, setFormArea] = useState("");
   const [formPrice, setFormPrice] = useState("");
+  const [editingTank, setEditingTank] = useState<Tank | null>(null);
   const [tanksAll, setTanksAll] = useState<Tank[]>([]);
   const { toast } = useToast();
   const [rev, setRev] = useState(0);
@@ -130,6 +131,14 @@ const Tanks = () => {
   };
 
   const isValid = formName.trim().length > 0;
+  
+  const onEditTank = (tank: Tank) => {
+    setEditingTank(tank);
+    setFormName(tank.name);
+    setFormType(tank.type);
+    setOpen(true);
+  };
+
   const onCreateTank = async () => {
     if (!locationId || !isValid || !accountId) return;
     
@@ -146,35 +155,40 @@ const Tanks = () => {
       return;
     }
 
-    const id = crypto.randomUUID();
     const name = formName.trim();
     try {
-      const { error } = await supabase.from("tanks").insert([
-        { 
-          id, 
-          account_id: accountId, 
-          location_id: locationId, 
-          name, 
+      if (editingTank) {
+        // Update existing tank
+        const { error } = await supabase.from("tanks").update({
+          name,
           type: formType,
-          seed_date: formSeedDate?.toISOString().slice(0, 10),
-          seed_weight: formSeedWeight ? parseFloat(formSeedWeight) : null,
-          total_seed: formTotalSeed ? parseInt(formTotalSeed) : null,
-          area: formArea ? parseFloat(formArea) : null,
-          price: formPrice ? parseFloat(formPrice) : null
-        },
-      ]);
-      if (error) throw error;
-      
-      // If seed date is provided, also create a crop entry
-      if (formSeedDate) {
-        await supabase.from("tank_crops").insert([
+        }).eq("id", editingTank.id);
+        if (error) throw error;
+      } else {
+        // Create new tank
+        const id = crypto.randomUUID();
+        const { error } = await supabase.from("tanks").insert([
           { 
+            id, 
             account_id: accountId, 
-            tank_id: id, 
-            seed_date: formSeedDate.toISOString().slice(0, 10), 
-            end_date: null 
+            location_id: locationId, 
+            name, 
+            type: formType,
           },
         ]);
+        if (error) throw error;
+        
+        // If seed date is provided, also create a crop entry
+        if (formSeedDate) {
+          await supabase.from("tank_crops").insert([
+            { 
+              account_id: accountId, 
+              tank_id: id, 
+              seed_date: formSeedDate.toISOString().slice(0, 10), 
+              end_date: null 
+            },
+          ]);
+        }
       }
       
       setOpen(false);
@@ -186,11 +200,15 @@ const Tanks = () => {
       setFormTotalSeed("");
       setFormArea("");
       setFormPrice("");
+      setEditingTank(null);
       
-      toast({ title: "Tank Created", description: `${name} has been added successfully` });
+      toast({ 
+        title: editingTank ? "Tank Updated" : "Tank Created", 
+        description: `${name} has been ${editingTank ? "updated" : "added"} successfully` 
+      });
       setRev((r) => r + 1);
     } catch (e) {
-      toast({ title: "Error", description: "Failed to create tank.", variant: "destructive" });
+      toast({ title: "Error", description: `Failed to ${editingTank ? "update" : "create"} tank.`, variant: "destructive" });
     }
   };
 
@@ -239,7 +257,9 @@ const Tanks = () => {
             </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle className="text-lg font-semibold">Details</DialogTitle>
+                <DialogTitle className="text-lg font-semibold">
+                  {editingTank ? "Edit Tank" : "Add Tank"}
+                </DialogTitle>
               </DialogHeader>
               <div className="grid gap-6 py-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -337,7 +357,7 @@ const Tanks = () => {
               </div>
               <DialogFooter>
                 <Button onClick={onCreateTank} disabled={!isValid} className="bg-cyan-500 hover:bg-cyan-600 text-white">
-                  Save
+                  {editingTank ? "Update" : "Save"}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -375,11 +395,14 @@ const Tanks = () => {
                       <TableCell>{d?.seedDate ? new Date(d.seedDate).toLocaleDateString() : "—"}</TableCell>
                       <TableCell>{d?.seedDate && !d?.cropEnd ? `Day ${cropDayFromStartIST(new Date(d.seedDate))}` : d?.cropEnd ? `Ended` : "—"}</TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
-                        {d?.seedDate && !d?.cropEnd ? (
-                          <Button variant="destructive" size="sm" onClick={() => onEndCrop(t)}>End Crop</Button>
-                        ) : (
-                          <Button variant="outline" size="sm" onClick={() => onStartCrop(t)}>Start Crop</Button>
-                        )}
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="sm" onClick={() => onEditTank(t)}>Edit</Button>
+                          {d?.seedDate && !d?.cropEnd ? (
+                            <Button variant="destructive" size="sm" onClick={() => onEndCrop(t)}>End Crop</Button>
+                          ) : (
+                            <Button variant="outline" size="sm" onClick={() => onStartCrop(t)}>Start Crop</Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );

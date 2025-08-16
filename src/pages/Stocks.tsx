@@ -61,6 +61,7 @@ const Stocks = () => {
   const [open, setOpen] = useState(false);
   const [stocks, setStocks] = useState<StockRecord[]>([]);
   const [rev, setRev] = useState(0);
+  const [editingStock, setEditingStock] = useState<StockRecord | null>(null);
 
   // Form state
   const [selectedName, setSelectedName] = useState<string>("");
@@ -128,7 +129,21 @@ const Stocks = () => {
       setMinStock(0);
       setExpiry(undefined);
       setNotes("");
+      setEditingStock(null);
     }
+  };
+
+  const onEditStock = (stock: StockRecord) => {
+    setEditingStock(stock);
+    setSelectedName(stock.name);
+    setCategory(stock.category);
+    setUnit(stock.unit);
+    setQuantity(stock.quantity);
+    setPricePerUnit(stock.pricePerUnit);
+    setMinStock(stock.minStock);
+    setExpiry(stock.expiryDate ? new Date(stock.expiryDate) : undefined);
+    setNotes(stock.notes || "");
+    setOpen(true);
   };
 
   const handleSubmit = async () => {
@@ -151,37 +166,11 @@ const Stocks = () => {
       const expiryDateStr = expiry ? format(expiry, "yyyy-MM-dd") : null;
       const amountDelta = Number(quantity) * Number(pricePerUnit);
 
-      const { data: existing, error: fetchErr } = await supabase
-        .from("stocks")
-        .select("id, quantity, total_amount")
-        .eq("account_id", accountId)
-        .eq("location_id", locationId)
-        .eq("name", name)
-        .eq("unit", unit)
-        .maybeSingle();
-      if (fetchErr) throw fetchErr;
-
-      if (existing) {
-        const newQty = Number(existing.quantity || 0) + Number(quantity);
-        const newTotal = Number(existing.total_amount || 0) + amountDelta;
+      if (editingStock) {
+        // Update existing stock
         const { error: updErr } = await supabase
           .from("stocks")
           .update({
-            quantity: newQty,
-            price_per_unit: pricePerUnit,
-            min_stock: minStock,
-            expiry_date: expiryDateStr,
-            notes: notes || null,
-            total_amount: newTotal,
-            category,
-          })
-          .eq("id", existing.id);
-        if (updErr) throw updErr;
-      } else {
-        const { error: insErr } = await supabase.from("stocks").insert([
-          {
-            account_id: accountId,
-            location_id: locationId,
             name,
             category,
             unit,
@@ -191,14 +180,63 @@ const Stocks = () => {
             expiry_date: expiryDateStr,
             notes: notes || null,
             total_amount: amountDelta,
-          },
-        ]);
-        if (insErr) throw insErr;
+          })
+          .eq("id", editingStock.id);
+        if (updErr) throw updErr;
+      } else {
+        // Check for existing stock to add to
+        const { data: existing, error: fetchErr } = await supabase
+          .from("stocks")
+          .select("id, quantity, total_amount")
+          .eq("account_id", accountId)
+          .eq("location_id", locationId)
+          .eq("name", name)
+          .eq("unit", unit)
+          .maybeSingle();
+        if (fetchErr) throw fetchErr;
+
+        if (existing) {
+          const newQty = Number(existing.quantity || 0) + Number(quantity);
+          const newTotal = Number(existing.total_amount || 0) + amountDelta;
+          const { error: updErr } = await supabase
+            .from("stocks")
+            .update({
+              quantity: newQty,
+              price_per_unit: pricePerUnit,
+              min_stock: minStock,
+              expiry_date: expiryDateStr,
+              notes: notes || null,
+              total_amount: newTotal,
+              category,
+            })
+            .eq("id", existing.id);
+          if (updErr) throw updErr;
+        } else {
+          const { error: insErr } = await supabase.from("stocks").insert([
+            {
+              account_id: accountId,
+              location_id: locationId,
+              name,
+              category,
+              unit,
+              quantity,
+              price_per_unit: pricePerUnit,
+              min_stock: minStock,
+              expiry_date: expiryDateStr,
+              notes: notes || null,
+              total_amount: amountDelta,
+            },
+          ]);
+          if (insErr) throw insErr;
+        }
       }
 
       setRev((r) => r + 1);
       handleOpen(false);
-      toast({ title: "Saved", description: `${name} — ${quantity} ${unit}` });
+      toast({ 
+        title: editingStock ? "Updated" : "Saved", 
+        description: `${name} — ${quantity} ${unit}` 
+      });
     } catch (e) {
       toast({ title: "Error", description: "Failed to save. Please try again.", variant: "destructive" });
     }
@@ -220,7 +258,7 @@ const Stocks = () => {
               </DialogTrigger>
               <DialogContent className="sm:max-w-[520px]">
                 <DialogHeader>
-                  <DialogTitle>Add Stock</DialogTitle>
+                  <DialogTitle>{editingStock ? "Edit Stock" : "Add Stock"}</DialogTitle>
                 </DialogHeader>
 
               <div className="grid grid-cols-1 gap-4">
@@ -320,7 +358,7 @@ const Stocks = () => {
               </div>
 
               <DialogFooter>
-                <Button onClick={handleSubmit}>Save</Button>
+                <Button onClick={handleSubmit}>{editingStock ? "Update" : "Save"}</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -341,12 +379,13 @@ const Stocks = () => {
                 <TableHead>Total amount</TableHead>
                 <TableHead>Expiry</TableHead>
                 <TableHead>Notes</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {stocks.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground">No stock yet. Add your first item.</TableCell>
+                  <TableCell colSpan={9} className="text-center text-muted-foreground">No stock yet. Add your first item.</TableCell>
                 </TableRow>
               ) : (
                 stocks.map((s) => {
@@ -382,6 +421,9 @@ const Stocks = () => {
                         )}
                       </TableCell>
                       <TableCell className="max-w-[180px] truncate" title={s.notes}>{s.notes || "—"}</TableCell>
+                      <TableCell>
+                        <Button variant="outline" size="sm" onClick={() => onEditStock(s)}>Edit</Button>
+                      </TableCell>
                     </TableRow>
                   );
                 })

@@ -133,6 +133,7 @@ const TankFeeding = () => {
   const [notes, setNotes] = useState<string>("");
   const [entries, setEntries] = useState<FeedingEntry[]>([]);
   const [rev, setRev] = useState(0);
+  const [editingFeeding, setEditingFeeding] = useState<any>(null);
 
   // Add Stock modal
   const [addOpen, setAddOpen] = useState(false);
@@ -200,6 +201,14 @@ const TankFeeding = () => {
 
   const completed = useMemo(() => new Set(entries.map(e => e.schedule)), [entries]);
   const remainingStock = selectedStock?.quantity ?? 0;
+
+  const onEditFeeding = (entry: any, feedingId: string) => {
+    setEditingFeeding({ ...entry, id: feedingId });
+    setSchedule(entry.schedule);
+    setQuantity(entry.quantity);
+    setTimeStr(entry.time);
+    setNotes(entry.notes || "");
+  };
 
   const saveFeedingEntry = async () => {
     if (!hasActiveCrop) {
@@ -281,6 +290,7 @@ const TankFeeding = () => {
       setSchedule("");
       setQuantity(0);
       setNotes("");
+      setEditingFeeding(null);
       setRev((r) => r + 1);
       toast({ title: "Saved", description: `Schedule ${schedule} feeding recorded` });
     } catch (error) {

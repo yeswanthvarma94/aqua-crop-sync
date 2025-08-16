@@ -84,6 +84,7 @@ const Materials = () => {
   const [notes, setNotes] = useState<string>("");
   const [entries, setEntries] = useState<MaterialLogEntry[]>([]);
   const [rev, setRev] = useState(0);
+  const [editingMaterial, setEditingMaterial] = useState<any>(null);
 
   const loadStocks = async (locationId: string) => {
     const { data, error } = await supabase
@@ -150,6 +151,14 @@ const Materials = () => {
   const lowStocks = useMemo(() => nonFeedStocks.filter(s => s.minStock > 0 && s.quantity < s.minStock), [nonFeedStocks]);
   const remaining = selectedStock?.quantity ?? 0;
 
+  const onEditMaterial = (entry: any, materialId: string) => {
+    setEditingMaterial({ ...entry, id: materialId });
+    setSelectedStockId(entry.stockId);
+    setQuantity(entry.quantity);
+    setTimeStr(entry.time);
+    setNotes(entry.notes || "");
+  };
+
   const saveUsage = async () => {
     if (!location?.id || !tank?.id || !accountId) return;
     if (!selectedStock) {
@@ -201,6 +210,7 @@ const Materials = () => {
       // Reset inputs and refresh
       setQuantity(0);
       setNotes("");
+      setEditingMaterial(null);
       toast({ title: "Saved", description: `${selectedStock.name} — ${quantity} ${selectedStock.unit}` });
       setRev((r) => r + 1);
     } catch (e) {
@@ -242,7 +252,7 @@ const Materials = () => {
 
             <Card>
               <CardHeader>
-                <CardTitle>Log Material Usage</CardTitle>
+                <CardTitle>{editingMaterial ? "Edit Material Usage" : "Log Material Usage"}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -283,8 +293,20 @@ const Materials = () => {
                   </div>
                 </div>
 
-                <div className="mt-4">
-                  <Button onClick={saveUsage} disabled={!tank?.id || !selectedStock || quantity <= 0 || quantity > remaining}>Save</Button>
+                <div className="mt-4 flex gap-2">
+                  <Button onClick={saveUsage} disabled={!tank?.id || !selectedStock || quantity <= 0 || quantity > remaining}>
+                    {editingMaterial ? "Update" : "Save"}
+                  </Button>
+                  {editingMaterial && (
+                    <Button variant="outline" onClick={() => {
+                      setEditingMaterial(null);
+                      setQuantity(0);
+                      setNotes("");
+                      setSelectedStockId("");
+                    }}>
+                      Cancel
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>

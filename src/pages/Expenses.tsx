@@ -318,6 +318,7 @@ const Expenses = () => {
   const [feedEntries, setFeedEntries] = useState<FeedingEntryWithPrice[]>([]);
   const [materialsEntries, setMaterialsEntries] = useState<MaterialLogEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<ExpenseEntry | null>(null);
 
   // Form state
   const [category, setCategory] = useState<ExpenseCategory>("manpower");
@@ -438,6 +439,15 @@ const Expenses = () => {
   const isManager = hasRole(["manager"]);
   const fmt = (n: number) => (isManager ? "—" : `₹ ${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`);
 
+  const onEditExpense = (expense: ExpenseEntry) => {
+    setEditingExpense(expense);
+    setCategory(expense.category);
+    setCustomName(expense.name);
+    setAmount(expense.amount);
+    setDateStr(expense.date);
+    setNotes(expense.notes || "");
+  };
+
   const onAdd = async () => {
     if (!accountId || !location?.id || !tank?.id) return;
     if (amount <= 0) {
@@ -448,14 +458,32 @@ const Expenses = () => {
     try {
       const name = category === "other" ? (customName.trim() || "Other") : categoryLabel[category];
       
-      await saveExpense(accountId, location.id, tank.id, {
-        category,
-        name,
-        amount,
-        date: dateStr,
-        time: timeStr,
-        notes: notes || undefined,
-      });
+      if (editingExpense) {
+        // Update existing expense
+        const { error } = await supabase
+          .from('expenses')
+          .update({
+            category,
+            name,
+            description: name,
+            amount,
+            incurred_at: dateStr,
+            notes: notes || null,
+          })
+          .eq('id', editingExpense.id);
+        
+        if (error) throw error;
+      } else {
+        // Create new expense
+        await saveExpense(accountId, location.id, tank.id, {
+          category,
+          name,
+          amount,
+          date: dateStr,
+          time: timeStr,
+          notes: notes || undefined,
+        });
+      }
 
       // Reload expenses
       const updatedExpenses = await loadExpenses(accountId, location.id, tank.id);
@@ -466,7 +494,11 @@ const Expenses = () => {
       setCustomName("");
       setCategory("manpower");
       setDateStr(todayKey);
-      toast({ title: "Saved", description: `${name} — ₹ ${amount.toFixed(2)}` });
+      setEditingExpense(null);
+      toast({ 
+        title: editingExpense ? "Updated" : "Saved", 
+        description: `${name} — ₹ ${amount.toFixed(2)}` 
+      });
     } catch (error) {
       console.error('Error saving expense:', error);
       toast({ title: "Error", description: "Failed to save expense" });
@@ -494,7 +526,7 @@ const Expenses = () => {
           <>
             <Card>
               <CardHeader>
-                <CardTitle>Add Expense</CardTitle>
+                <CardTitle>{editingExpense ? "Edit Expense" : "Add Expense"}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -546,8 +578,22 @@ const Expenses = () => {
                   </div>
                 </div>
 
-                <div className="mt-4">
-                  <Button onClick={onAdd} disabled={amount <= 0}>Save Expense</Button>
+                <div className="mt-4 flex gap-2">
+                  <Button onClick={onAdd} disabled={amount <= 0}>
+                    {editingExpense ? "Update" : "Add"} Expense
+                  </Button>
+                  {editingExpense && (
+                    <Button variant="outline" onClick={() => {
+                      setEditingExpense(null);
+                      setAmount(0);
+                      setNotes("");
+                      setCustomName("");
+                      setCategory("manpower");
+                      setDateStr(todayKey);
+                    }}>
+                      Cancel
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -564,12 +610,13 @@ const Expenses = () => {
                       <TableHead>Name</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead>Amount</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {entries.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={4} className="text-center text-muted-foreground">No expenses added yet.</TableCell>
+                        <TableCell colSpan={5} className="text-center text-muted-foreground">No expenses added yet.</TableCell>
                       </TableRow>
                     ) : (
                       entries.slice(0, 10).map((e) => (
@@ -578,6 +625,9 @@ const Expenses = () => {
                           <TableCell>{e.name}</TableCell>
                           <TableCell>{e.date}</TableCell>
                           <TableCell>{fmt(e.amount)}</TableCell>
+                          <TableCell>
+                            <Button variant="outline" size="sm" onClick={() => onEditExpense(e)}>Edit</Button>
+                          </TableCell>
                         </TableRow>
                       ))
                     )}
