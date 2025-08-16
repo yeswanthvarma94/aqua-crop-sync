@@ -135,13 +135,6 @@ const TankFeeding = () => {
   const [rev, setRev] = useState(0);
   const [editingFeeding, setEditingFeeding] = useState<any>(null);
 
-  // Add Stock modal
-  const [addOpen, setAddOpen] = useState(false);
-  const [newStockName, setNewStockName] = useState("");
-  const [newStockQty, setNewStockQty] = useState<number>(0);
-  const [newStockUnit, setNewStockUnit] = useState<StockRecord["unit"]>("kg");
-  const [newStockPpu, setNewStockPpu] = useState<number>(0);
-
   useEffect(() => {
     const loadData = async () => {
       if (accountId && locationId) {
@@ -299,75 +292,6 @@ const TankFeeding = () => {
     }
   };
 
-  const addStock = async () => {
-    if (!locationId || !accountId) return;
-    const name = newStockName.trim();
-    if (!name) {
-      toast({ title: "Missing name", description: "Enter stock name." });
-      return;
-    }
-    if (newStockQty <= 0) {
-      toast({ title: "Invalid quantity", description: "Quantity must be greater than zero." });
-      return;
-    }
-    if (newStockPpu < 0) {
-      toast({ title: "Invalid price", description: "Price per unit cannot be negative." });
-      return;
-    }
-
-    try {
-      // Check if stock already exists
-      const { data: existingStock } = await supabase
-        .from("stocks")
-        .select("*")
-        .eq("account_id", accountId)
-        .eq("location_id", locationId)
-        .eq("name", name)
-        .eq("category", "feed")
-        .eq("unit", newStockUnit)
-        .maybeSingle();
-
-      if (existingStock) {
-        // Update existing stock
-        const newQuantity = Number(existingStock.quantity) + newStockQty;
-        const newTotalAmount = Number(existingStock.total_amount) + (newStockQty * newStockPpu);
-        
-        await supabase
-          .from("stocks")
-          .update({
-            quantity: newQuantity,
-            price_per_unit: newStockPpu,
-            total_amount: newTotalAmount,
-          })
-          .eq("id", existingStock.id);
-      } else {
-        // Create new stock
-        await supabase
-          .from("stocks")
-          .insert({
-            account_id: accountId,
-            location_id: locationId,
-            name,
-            category: "feed",
-            unit: newStockUnit,
-            quantity: newStockQty,
-            price_per_unit: newStockPpu,
-            total_amount: newStockQty * newStockPpu,
-            min_stock: 0,
-          });
-      }
-
-      setAddOpen(false);
-      setNewStockName(""); 
-      setNewStockQty(0); 
-      setNewStockUnit("kg"); 
-      setNewStockPpu(0);
-      setRev(r => r + 1); // Refresh stocks
-      toast({ title: "Saved", description: `${name} — ${newStockQty} ${newStockUnit}` });
-    } catch (error) {
-      toast({ title: "Error", description: "Failed to save stock" });
-    }
-  };
 
   return (
     <main className="p-4 space-y-4">
@@ -412,63 +336,16 @@ const TankFeeding = () => {
 
                 <div className="space-y-2">
                   <Label>Feed Stock</Label>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1">
-                      <Select value={selectedStockId} onValueChange={setSelectedStockId}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select stock" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {feedStocks.map((s) => (
-                            <SelectItem key={s.id} value={s.id}>{s.name} — {s.unit.toUpperCase()}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <Dialog open={addOpen} onOpenChange={setAddOpen}>
-                      <DialogTrigger asChild>
-                        <Button variant="secondary" size="sm">Add Stock</Button>
-                      </DialogTrigger>
-                      <DialogContent className="sm:max-w-[460px]">
-                        <DialogHeader>
-                          <DialogTitle>Add Stock (Feed)</DialogTitle>
-                        </DialogHeader>
-                        <div className="grid gap-3">
-                          <div className="space-y-2">
-                            <Label>Stock Name</Label>
-                            <Input value={newStockName} onChange={(e) => setNewStockName(e.target.value)} placeholder="e.g., Feed 3mm" />
-                          </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-2">
-                              <Label>Quantity</Label>
-                              <Input type="number" inputMode="decimal" min={0} step="any" value={newStockQty} onChange={(e) => setNewStockQty(Number(e.target.value))} />
-                            </div>
-                            <div className="space-y-2">
-                              <Label>Unit</Label>
-                              <Select value={newStockUnit} onValueChange={(v) => setNewStockUnit(v as any)}>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Unit" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="kg">KG</SelectItem>
-                                  <SelectItem value="liters">Liters</SelectItem>
-                                  <SelectItem value="bags">Bags</SelectItem>
-                                  <SelectItem value="pieces">Pieces</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Price per unit (INR)</Label>
-                            <Input type="number" inputMode="decimal" min={0} step="any" value={newStockPpu} onChange={(e) => setNewStockPpu(Number(e.target.value))} />
-                          </div>
-                        </div>
-                        <DialogFooter>
-                          <Button onClick={addStock}>Save</Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
+                  <Select value={selectedStockId} onValueChange={setSelectedStockId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select stock" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {feedStocks.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>{s.name} — {s.unit.toUpperCase()}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   {selectedStock && (
                     <div className="mt-1 text-xs text-muted-foreground flex items-center gap-2">
                       <Badge variant={remainingStock <= (selectedStock.minStock || 0) ? "destructive" : "secondary"}>
