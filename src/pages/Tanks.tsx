@@ -95,13 +95,15 @@ const Tanks = () => {
     if (!error) {
       const mapped = (data || []).map((t: any) => ({ id: t.id, name: t.name, type: t.type, locationId: t.location_id })) as Tank[];
       setTanksAll(mapped);
+    } else {
+      console.error("Error loading tanks:", error);
     }
   };
 
   useEffect(() => {
     loadTanks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [locationId, rev]);
+  }, [locationId, rev, accountId]);
 
   const [activeCrops, setActiveCrops] = useState<Record<string, TankDetail>>({});
   const loadActiveCrops = async (tankIds: string[]) => {
@@ -120,8 +122,10 @@ const Tanks = () => {
   };
 
   useEffect(() => {
-    loadActiveCrops(tanksAll.map(t => t.id));
-  }, [tanksAll]);
+    if (tanksAll.length > 0) {
+      loadActiveCrops(tanksAll.map(t => t.id));
+    }
+  }, [tanksAll, accountId]);
 
   const tanks = useMemo(() => tanksAll.filter((t) => t.locationId === locationId), [tanksAll, locationId]);
 
@@ -136,6 +140,14 @@ const Tanks = () => {
     setEditingTank(tank);
     setFormName(tank.name);
     setFormType(tank.type);
+    
+    // Clear other form fields for edit mode
+    setFormSeedDate(undefined);
+    setFormSeedWeight("");
+    setFormTotalSeed("");
+    setFormArea("");
+    setFormPrice("");
+    
     setOpen(true);
   };
 
