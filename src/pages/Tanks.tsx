@@ -162,7 +162,7 @@ const Tanks = () => {
         const { error } = await supabase.from("tanks").update({
           name,
           type: formType,
-        }).eq("id", editingTank.id);
+        }).eq("id", editingTank.id).eq("account_id", accountId);
         if (error) throw error;
       } else {
         // Create new tank
@@ -343,17 +343,6 @@ const Tanks = () => {
                   </div>
                 </div>
 
-                <div className="grid gap-2">
-                  <Label htmlFor="price">Price</Label>
-                  <Input 
-                    id="price" 
-                    type="number"
-                    step="0.01"
-                    value={formPrice} 
-                    onChange={(e) => setFormPrice(e.target.value)} 
-                    placeholder="e.g. 25000" 
-                  />
-                </div>
               </div>
               <DialogFooter>
                 <Button onClick={onCreateTank} disabled={!isValid} className="bg-cyan-500 hover:bg-cyan-600 text-white">
