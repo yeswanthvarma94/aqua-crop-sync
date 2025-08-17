@@ -52,6 +52,7 @@ const Tanks = () => {
   const [formType, setFormType] = useState<"shrimp" | "fish">("fish");
   const [formSeedDate, setFormSeedDate] = useState<Date | undefined>();
   const [formSeedWeight, setFormSeedWeight] = useState("");
+  const [formPLSize, setFormPLSize] = useState("");
   const [formTotalSeed, setFormTotalSeed] = useState("");
   const [formArea, setFormArea] = useState("");
   const [formPrice, setFormPrice] = useState("");
@@ -144,9 +145,9 @@ const Tanks = () => {
     // Clear other form fields for edit mode
     setFormSeedDate(undefined);
     setFormSeedWeight("");
+    setFormPLSize("");
     setFormTotalSeed("");
     setFormArea("");
-    setFormPrice("");
     
     setOpen(true);
   };
@@ -170,36 +171,90 @@ const Tanks = () => {
     const name = formName.trim();
     try {
       if (editingTank) {
-        // Update existing tank
-        const { error } = await supabase.from("tanks").update({
+        // Update existing tank with all details
+        const tankData = {
           name,
           type: formType,
-        }).eq("id", editingTank.id).eq("account_id", accountId);
-        if (error) throw error;
-      } else {
-        // Create new tank
-        const id = crypto.randomUUID();
-        const { error } = await supabase.from("tanks").insert([
-          { 
-            id, 
-            account_id: accountId, 
-            location_id: locationId, 
-            name, 
-            type: formType,
-          },
-        ]);
+          seed_weight: formSeedWeight ? parseFloat(formSeedWeight) : null,
+          pl_size: formPLSize ? parseFloat(formPLSize) : null,
+          total_seed: formTotalSeed ? parseFloat(formTotalSeed) : null,
+          area: formArea ? parseFloat(formArea) : null,
+        };
+        
+        const { error } = await supabase
+          .from("tanks")
+          .update(tankData)
+          .eq("id", editingTank.id)
+          .eq("account_id", accountId);
         if (error) throw error;
         
-        // If seed date is provided, also create a crop entry
+        // Update crop data if seed date is provided
         if (formSeedDate) {
-          await supabase.from("tank_crops").insert([
-            { 
-              account_id: accountId, 
-              tank_id: id, 
-              seed_date: formSeedDate.toISOString().slice(0, 10), 
-              end_date: null 
-            },
-          ]);
+          const cropData = {
+            seed_date: formSeedDate.toISOString().slice(0, 10),
+            seed_weight: formSeedWeight ? parseFloat(formSeedWeight) : null,
+            pl_size: formPLSize ? parseFloat(formPLSize) : null,
+            total_seed: formTotalSeed ? parseFloat(formTotalSeed) : null,
+            area: formArea ? parseFloat(formArea) : null,
+          };
+          
+          // Check if there's an active crop to update
+          const { data: existingCrop } = await supabase
+            .from("tank_crops")
+            .select("id")
+            .eq("tank_id", editingTank.id)
+            .eq("account_id", accountId)
+            .is("end_date", null)
+            .maybeSingle();
+            
+          if (existingCrop) {
+            await supabase
+              .from("tank_crops")
+              .update(cropData)
+              .eq("id", existingCrop.id);
+          } else {
+            await supabase.from("tank_crops").insert([
+              { 
+                account_id: accountId, 
+                tank_id: editingTank.id, 
+                end_date: null,
+                ...cropData
+              },
+            ]);
+          }
+        }
+      } else {
+        // Create new tank with all details
+        const id = crypto.randomUUID();
+        const tankData = {
+          id, 
+          account_id: accountId, 
+          location_id: locationId, 
+          name, 
+          type: formType,
+          seed_weight: formSeedWeight ? parseFloat(formSeedWeight) : null,
+          pl_size: formPLSize ? parseFloat(formPLSize) : null,
+          total_seed: formTotalSeed ? parseFloat(formTotalSeed) : null,
+          area: formArea ? parseFloat(formArea) : null,
+        };
+        
+        const { error } = await supabase.from("tanks").insert([tankData]);
+        if (error) throw error;
+        
+        // If seed date is provided, also create a crop entry with details
+        if (formSeedDate) {
+          const cropData = {
+            account_id: accountId, 
+            tank_id: id, 
+            seed_date: formSeedDate.toISOString().slice(0, 10), 
+            end_date: null,
+            seed_weight: formSeedWeight ? parseFloat(formSeedWeight) : null,
+            pl_size: formPLSize ? parseFloat(formPLSize) : null,
+            total_seed: formTotalSeed ? parseFloat(formTotalSeed) : null,
+            area: formArea ? parseFloat(formArea) : null,
+          };
+          
+          await supabase.from("tank_crops").insert([cropData]);
         }
       }
       
@@ -209,9 +264,9 @@ const Tanks = () => {
       setFormType("fish");
       setFormSeedDate(undefined);
       setFormSeedWeight("");
+      setFormPLSize("");
       setFormTotalSeed("");
       setFormArea("");
-      setFormPrice("");
       setEditingTank(null);
       
       toast({ 
@@ -319,15 +374,31 @@ const Tanks = () => {
                     </Popover>
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="seedWeight">Seed weight (g)</Label>
-                    <Input 
-                      id="seedWeight" 
-                      type="number"
-                      step="0.1"
-                      value={formSeedWeight} 
-                      onChange={(e) => setFormSeedWeight(e.target.value)} 
-                      placeholder="e.g. 2" 
-                    />
+                    {formType === "fish" ? (
+                      <>
+                        <Label htmlFor="seedWeight">Seed weight (g)</Label>
+                        <Input 
+                          id="seedWeight" 
+                          type="number"
+                          step="0.1"
+                          value={formSeedWeight} 
+                          onChange={(e) => setFormSeedWeight(e.target.value)} 
+                          placeholder="e.g. 2" 
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <Label htmlFor="plSize">PL Size</Label>
+                        <Input 
+                          id="plSize" 
+                          type="number"
+                          step="0.1"
+                          value={formPLSize} 
+                          onChange={(e) => setFormPLSize(e.target.value)} 
+                          placeholder="e.g. 10" 
+                        />
+                      </>
+                    )}
                   </div>
                 </div>
 

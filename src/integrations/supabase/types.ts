@@ -376,29 +376,41 @@ export type Database = {
       tank_crops: {
         Row: {
           account_id: string
+          area: number | null
           created_at: string
           end_date: string | null
           id: string
+          pl_size: number | null
           seed_date: string
+          seed_weight: number | null
           tank_id: string
+          total_seed: number | null
           updated_at: string
         }
         Insert: {
           account_id: string
+          area?: number | null
           created_at?: string
           end_date?: string | null
           id?: string
+          pl_size?: number | null
           seed_date: string
+          seed_weight?: number | null
           tank_id: string
+          total_seed?: number | null
           updated_at?: string
         }
         Update: {
           account_id?: string
+          area?: number | null
           created_at?: string
           end_date?: string | null
           id?: string
+          pl_size?: number | null
           seed_date?: string
+          seed_weight?: number | null
           tank_id?: string
+          total_seed?: number | null
           updated_at?: string
         }
         Relationships: [
@@ -421,31 +433,43 @@ export type Database = {
       tanks: {
         Row: {
           account_id: string
+          area: number | null
           created_at: string
           id: string
           location_id: string
           name: string
+          pl_size: number | null
+          seed_weight: number | null
           status: string
+          total_seed: number | null
           type: string | null
           updated_at: string
         }
         Insert: {
           account_id: string
+          area?: number | null
           created_at?: string
           id?: string
           location_id: string
           name: string
+          pl_size?: number | null
+          seed_weight?: number | null
           status?: string
+          total_seed?: number | null
           type?: string | null
           updated_at?: string
         }
         Update: {
           account_id?: string
+          area?: number | null
           created_at?: string
           id?: string
           location_id?: string
           name?: string
+          pl_size?: number | null
+          seed_weight?: number | null
           status?: string
+          total_seed?: number | null
           type?: string | null
           updated_at?: string
         }
