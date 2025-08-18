@@ -20,11 +20,25 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/state/AuthContext";
 import { loadPlan, checkTankLimit } from "@/lib/subscription";
 
-interface Tank { id: string; locationId: string; name: string; type: "shrimp" | "fish" }
+interface Tank { 
+  id: string; 
+  locationId: string; 
+  name: string; 
+  type: "shrimp" | "fish";
+  seed_weight?: number | null;
+  pl_size?: number | null;
+  total_seed?: number | null;
+  area?: number | null;
+  status?: string;
+}
 
 interface TankDetail {
   seedDate?: string;
   cropEnd?: string;
+  seed_weight?: number | null;
+  pl_size?: number | null;
+  total_seed?: number | null;
+  area?: number | null;
 }
 
 const useSEO = (title: string, description: string) => {
@@ -89,12 +103,22 @@ const Tanks = () => {
     if (!accountId || !locationId) return;
     const { data, error } = await supabase
       .from("tanks")
-      .select("id, name, type, location_id")
+      .select("id, name, type, location_id, seed_weight, pl_size, total_seed, area, status")
       .eq("account_id", accountId)
       .eq("location_id", locationId)
       .order("created_at", { ascending: false });
     if (!error) {
-      const mapped = (data || []).map((t: any) => ({ id: t.id, name: t.name, type: t.type, locationId: t.location_id })) as Tank[];
+      const mapped = (data || []).map((t: any) => ({ 
+        id: t.id, 
+        name: t.name, 
+        type: t.type, 
+        locationId: t.location_id,
+        seed_weight: t.seed_weight,
+        pl_size: t.pl_size,
+        total_seed: t.total_seed,
+        area: t.area,
+        status: t.status
+      })) as Tank[];
       setTanksAll(mapped);
     } else {
       console.error("Error loading tanks:", error);
@@ -111,13 +135,20 @@ const Tanks = () => {
     if (tankIds.length === 0 || !accountId) { setActiveCrops({}); return; }
     const { data } = await supabase
       .from("tank_crops")
-      .select("tank_id, seed_date, end_date")
+      .select("tank_id, seed_date, end_date, seed_weight, pl_size, total_seed, area")
       .in("tank_id", tankIds)
       .eq("account_id", accountId)
       .is("end_date", null);
     const map: Record<string, TankDetail> = {};
     (data || []).forEach((row: any) => {
-      map[row.tank_id] = { seedDate: row.seed_date, cropEnd: row.end_date || undefined };
+      map[row.tank_id] = { 
+        seedDate: row.seed_date, 
+        cropEnd: row.end_date || undefined,
+        seed_weight: row.seed_weight,
+        pl_size: row.pl_size,
+        total_seed: row.total_seed,
+        area: row.area
+      };
     });
     setActiveCrops(map);
   };
@@ -137,17 +168,24 @@ const Tanks = () => {
 
   const isValid = formName.trim().length > 0;
   
-  const onEditTank = (tank: Tank) => {
+  const onEditTank = async (tank: Tank) => {
     setEditingTank(tank);
     setFormName(tank.name);
     setFormType(tank.type);
     
-    // Clear other form fields for edit mode
-    setFormSeedDate(undefined);
-    setFormSeedWeight("");
-    setFormPLSize("");
-    setFormTotalSeed("");
-    setFormArea("");
+    // Load existing tank data
+    setFormSeedWeight(tank.seed_weight?.toString() || "");
+    setFormPLSize(tank.pl_size?.toString() || "");
+    setFormTotalSeed(tank.total_seed?.toString() || "");
+    setFormArea(tank.area?.toString() || "");
+    
+    // Load active crop data if available
+    const activeCrop = activeCrops[tank.id];
+    if (activeCrop?.seedDate) {
+      setFormSeedDate(new Date(activeCrop.seedDate));
+    } else {
+      setFormSeedDate(undefined);
+    }
     
     setOpen(true);
   };
@@ -447,6 +485,9 @@ const Tanks = () => {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Type</TableHead>
+                <TableHead>Seed Weight/PL Size</TableHead>
+                <TableHead>Total Seed</TableHead>
+                <TableHead>Area (acres)</TableHead>
                 <TableHead>Seed Date</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Actions</TableHead>
@@ -455,17 +496,35 @@ const Tanks = () => {
             <TableBody>
               {tanks.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground">No tanks found for this location.</TableCell>
+                  <TableCell colSpan={8} className="text-center text-muted-foreground">No tanks found for this location.</TableCell>
                 </TableRow>
               ) : (
                 tanks.map((t) => {
                   const d = activeCrops[t.id];
+                  // Use crop data if available, otherwise use tank data
+                  const seedWeight = d?.seed_weight ?? t.seed_weight;
+                  const plSize = d?.pl_size ?? t.pl_size;
+                  const totalSeed = d?.total_seed ?? t.total_seed;
+                  const area = d?.area ?? t.area;
+                  
                   return (
                     <TableRow key={t.id} onClick={() => handleSelectTank(t)} className="cursor-pointer">
                       <TableCell className="font-medium">{t.name}</TableCell>
                       <TableCell className="capitalize">{t.type}</TableCell>
+                      <TableCell>
+                        {t.type === "fish" 
+                          ? (seedWeight ? `${seedWeight}g` : "—")
+                          : (plSize ? `PL${plSize}` : "—")
+                        }
+                      </TableCell>
+                      <TableCell>{totalSeed ? totalSeed.toLocaleString() : "—"}</TableCell>
+                      <TableCell>{area ? `${area} acres` : "—"}</TableCell>
                       <TableCell>{d?.seedDate ? new Date(d.seedDate).toLocaleDateString() : "—"}</TableCell>
-                      <TableCell>{d?.seedDate && !d?.cropEnd ? `Day ${cropDayFromStartIST(new Date(d.seedDate))}` : d?.cropEnd ? `Ended` : "—"}</TableCell>
+                      <TableCell>
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${d?.seedDate ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"}`}>
+                          {d?.seedDate && !d?.cropEnd ? `Day ${cropDayFromStartIST(new Date(d.seedDate))}` : d?.cropEnd ? `Ended` : "Idle"}
+                        </span>
+                      </TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <div className="flex gap-2">
                           <Button variant="outline" size="sm" onClick={() => onEditTank(t)}>Edit</Button>
