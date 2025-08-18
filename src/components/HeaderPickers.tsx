@@ -62,7 +62,7 @@ const HeaderPickers = () => {
     <div className="w-full flex items-center gap-2">
       <div className="flex-1">
         <Select value={location?.id} onValueChange={onSelectLocation} disabled={locations.length === 0}>
-          <SelectTrigger className="w-full"><SelectValue placeholder={location?.name || "Select Location"} /></SelectTrigger>
+          <SelectTrigger className="w-full"><SelectValue placeholder={location?.name || "Select Stock Point"} /></SelectTrigger>
           <SelectContent>
             {locations.map((loc) => (
               <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>

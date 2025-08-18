@@ -520,7 +520,7 @@ const Expenses = () => {
         {!location || !tank ? (
           <Card>
             <CardHeader><CardTitle>Select a tank</CardTitle></CardHeader>
-            <CardContent className="text-sm text-muted-foreground">Choose a location and tank above to manage expenses.</CardContent>
+            <CardContent className="text-sm text-muted-foreground">Choose a stock point and tank above to manage expenses.</CardContent>
           </Card>
         ) : (
           <>

@@ -40,7 +40,7 @@ const useSEO = (title: string, description: string) => {
 };
 
 const Locations = () => {
-  useSEO("Locations | AquaLedger", "Manage farm locations: list, create, edit, delete.");
+  useSEO("Stock Points | AquaLedger", "Manage farm stock points: list, create, edit, delete.");
   const navigate = useNavigate();
   const { setLocation, setTank } = useSelection();
   const { accountId } = useAuth();
@@ -157,15 +157,15 @@ const Locations = () => {
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Button variant="outline" size="sm" onClick={() => navigate("/")}>← Dashboard</Button>
-          <h1 className="text-xl font-semibold">Locations</h1>
+          <h1 className="text-xl font-semibold">Stock Points</h1>
         </div>
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
           <DialogTrigger asChild>
-            <Button size="sm">Add Location</Button>
+            <Button size="sm">Add Stock Point</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{editing ? "Edit Location" : "Add Location"}</DialogTitle>
+              <DialogTitle>{editing ? "Edit Stock Point" : "Add Stock Point"}</DialogTitle>
             </DialogHeader>
             <div className="grid gap-4 py-2">
               <div className="grid gap-2">
@@ -188,7 +188,7 @@ const Locations = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>All Locations</CardTitle>
+          <CardTitle>All Stock Points</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
@@ -202,7 +202,7 @@ const Locations = () => {
             <TableBody>
               {locations.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center text-muted-foreground">No locations yet. Add your first one.</TableCell>
+                  <TableCell colSpan={3} className="text-center text-muted-foreground">No stock points yet. Add your first one.</TableCell>
                 </TableRow>
               ) : (
                 locations.map((loc) => (

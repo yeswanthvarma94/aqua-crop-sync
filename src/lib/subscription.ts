@@ -52,7 +52,7 @@ export const checkLocationLimit = async (accountId: string, plan: Plan): Promise
   if (currentCount >= limits.locations) {
     return { 
       canCreate: false, 
-      message: `You've reached your limit of ${limits.locations} location${limits.locations > 1 ? 's' : ''}. Upgrade to ${plan === 'Free' ? 'Pro' : 'Enterprise'} plan to add more.`
+      message: `You've reached your limit of ${limits.locations} stock point${limits.locations > 1 ? 's' : ''}. Upgrade to ${plan === 'Free' ? 'Pro' : 'Enterprise'} plan to add more.`
     };
   }
 
@@ -81,7 +81,7 @@ export const checkTankLimit = async (accountId: string, locationId: string, plan
   if (currentCount >= limits.tanksPerLocation) {
     return { 
       canCreate: false, 
-      message: `You've reached your limit of ${limits.tanksPerLocation} tank${limits.tanksPerLocation > 1 ? 's' : ''} per location. Upgrade to ${plan === 'Free' ? 'Pro' : 'Enterprise'} plan to add more.`
+      message: `You've reached your limit of ${limits.tanksPerLocation} tank${limits.tanksPerLocation > 1 ? 's' : ''} per stock point. Upgrade to ${plan === 'Free' ? 'Pro' : 'Enterprise'} plan to add more.`
     };
   }
 

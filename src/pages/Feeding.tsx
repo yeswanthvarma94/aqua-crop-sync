@@ -92,11 +92,11 @@ const Feeding = () => {
         {!location ? (
           <Card>
             <CardHeader>
-              <CardTitle>Select a location</CardTitle>
+              <CardTitle>Select a stock point</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground mb-3">Choose a location to view its tanks for feeding.</p>
-              <Button onClick={() => navigate("/locations")}>Go to Locations</Button>
+              <p className="text-sm text-muted-foreground mb-3">Choose a stock point to view its tanks for feeding.</p>
+              <Button onClick={() => navigate("/locations")}>Go to Stock Points</Button>
             </CardContent>
           </Card>
         ) : (
@@ -117,7 +117,7 @@ const Feeding = () => {
                 <TableBody>
                   {tanks.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center text-muted-foreground">No tanks found for this location.</TableCell>
+                      <TableCell colSpan={4} className="text-center text-muted-foreground">No tanks found for this stock point.</TableCell>
                     </TableRow>
                   ) : (
                     tanks.map((t) => {

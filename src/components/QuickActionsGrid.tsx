@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { useSelection } from "@/state/SelectionContext";
 
 const items = [
-  { key: "locations", label: "Locations", icon: Building2 },
+  { key: "locations", label: "Stock Points", icon: Building2 },
   { key: "tanks", label: "Tanks", icon: DatabaseZap },
   { key: "stock", label: "Stock", icon: ShoppingCart },
   { key: "reports", label: "Reports", icon: FileText },
