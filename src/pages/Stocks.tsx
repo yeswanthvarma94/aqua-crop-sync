@@ -251,7 +251,7 @@ const Stocks = () => {
             <p className="text-xs text-muted-foreground">Per-location inventory with alerts</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="secondary" size="sm" onClick={() => navigate("/")}>Dashboard</Button>
+            <Button variant="secondary" size="sm" onClick={() => navigate("/")}>Home</Button>
             <Dialog open={open} onOpenChange={handleOpen}>
               <DialogTrigger asChild>
                 <Button size="sm"><Plus className="mr-2 h-4 w-4" />Add Stock</Button>

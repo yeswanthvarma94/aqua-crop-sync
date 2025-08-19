@@ -301,7 +301,7 @@ const TankFeeding = () => {
           <h1 className="text-xl font-semibold">Feeding — { name || "Tank" }</h1>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={() => navigate("/")}>Dashboard</Button>
+          <Button variant="secondary" size="sm" onClick={() => navigate("/")}>Home</Button>
           {hasActiveCrop && (
             <span className="text-sm text-muted-foreground">Day {dayCounter}</span>
           )}

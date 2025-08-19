@@ -350,12 +350,37 @@ const Tanks = () => {
     }
   };
 
+  const onDeleteTank = async (t: Tank) => {
+    try {
+      // First, end any active crops
+      await supabase
+        .from("tank_crops")
+        .update({ end_date: new Date().toISOString().slice(0, 10) })
+        .eq("tank_id", t.id)
+        .eq("account_id", accountId)
+        .is("end_date", null);
+
+      // Delete the tank
+      const { error } = await supabase
+        .from("tanks")
+        .delete()
+        .eq("id", t.id)
+        .eq("account_id", accountId);
+      
+      if (error) throw error;
+      setRev((r) => r + 1);
+      toast({ title: "Deleted", description: `${t.name} has been deleted` });
+    } catch (e) {
+      toast({ title: "Error", description: "Failed to delete tank.", variant: "destructive" });
+    }
+  };
+
   return (
     <main className="p-4 space-y-4">
       <header className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Tanks {location ? `— ${location.name}` : ""}</h1>
         <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={() => navigate("/")}>Dashboard</Button>
+          <Button variant="secondary" size="sm" onClick={() => navigate("/")}>Home</Button>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button size="sm">Add Tank</Button>
@@ -533,6 +558,7 @@ const Tanks = () => {
                           ) : (
                             <Button variant="outline" size="sm" onClick={() => onStartCrop(t)}>Start Crop</Button>
                           )}
+                          <Button variant="destructive" size="sm" onClick={() => onDeleteTank(t)}>Delete</Button>
                         </div>
                       </TableCell>
                     </TableRow>

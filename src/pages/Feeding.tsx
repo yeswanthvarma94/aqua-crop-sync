@@ -83,7 +83,7 @@ const Feeding = () => {
           <HeaderPickers />
           <div className="mt-2 flex items-center justify-between">
             <h2 className="text-base font-semibold">Feeding</h2>
-            <Button size="sm" variant="secondary" onClick={() => navigate("/")}>Dashboard</Button>
+            <Button size="sm" variant="secondary" onClick={() => navigate("/")}>Home</Button>
           </div>
         </div>
       </header>
