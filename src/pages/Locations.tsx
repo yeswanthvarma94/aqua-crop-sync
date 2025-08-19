@@ -40,7 +40,7 @@ const useSEO = (title: string, description: string) => {
 };
 
 const Locations = () => {
-  useSEO("Stock Points | AquaLedger", "Manage farm stock points: list, create, edit, delete.");
+  useSEO("Farms | AquaLedger", "Manage farms: list, create, edit, delete.");
   const navigate = useNavigate();
   const { setLocation, setTank } = useSelection();
   const { accountId } = useAuth();
@@ -156,16 +156,16 @@ const Locations = () => {
     <main className="p-4 space-y-4">
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="outline" size="sm" onClick={() => navigate("/")}>← Dashboard</Button>
-          <h1 className="text-xl font-semibold">Stock Points</h1>
+          <Button variant="outline" size="sm" onClick={() => navigate("/")}>← Home</Button>
+          <h1 className="text-xl font-semibold">Farms</h1>
         </div>
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
           <DialogTrigger asChild>
-            <Button size="sm">Add Stock Point</Button>
+            <Button size="sm">Add Farm</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{editing ? "Edit Stock Point" : "Add Stock Point"}</DialogTitle>
+              <DialogTitle>{editing ? "Edit Farm" : "Add Farm"}</DialogTitle>
             </DialogHeader>
             <div className="grid gap-4 py-2">
               <div className="grid gap-2">
@@ -188,7 +188,7 @@ const Locations = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>All Stock Points</CardTitle>
+          <CardTitle>All Farms</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
@@ -202,7 +202,7 @@ const Locations = () => {
             <TableBody>
               {locations.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center text-muted-foreground">No stock points yet. Add your first one.</TableCell>
+                  <TableCell colSpan={3} className="text-center text-muted-foreground">No farms yet. Add your first one.</TableCell>
                 </TableRow>
               ) : (
                 locations.map((loc) => (

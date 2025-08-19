@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Fish, Pill, Wallet, Settings as Gear } from "lucide-react";
+import { Home, Fish, Pill, Wallet, Settings as Gear } from "lucide-react";
 import { useAuth } from "@/state/AuthContext";
 const itemBase = "flex flex-col items-center justify-center gap-1 text-xs";
 const itemActive = "text-primary";
@@ -8,7 +8,7 @@ const itemInactive = "text-muted-foreground";
 const TabBar = () => {
   useAuth();
   const items = [
-    { to: "/", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/", label: "Home", icon: Home },
     { to: "/feeding", label: "Feeding", icon: Fish },
     { to: "/materials", label: "Materials", icon: Pill },
     { to: "/expenses", label: "Expenses", icon: Wallet },
