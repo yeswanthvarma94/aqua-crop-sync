@@ -38,6 +38,9 @@ const QuickActionsGrid = () => {
       case "reports":
         navigate("/reports");
         break;
+      case "recycle":
+        navigate("/recycle-bin");
+        break;
       default:
         break;
     }

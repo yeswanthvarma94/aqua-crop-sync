@@ -435,6 +435,7 @@ export type Database = {
           account_id: string
           area: number | null
           created_at: string
+          deleted_at: string | null
           id: string
           location_id: string
           name: string
@@ -449,6 +450,7 @@ export type Database = {
           account_id: string
           area?: number | null
           created_at?: string
+          deleted_at?: string | null
           id?: string
           location_id: string
           name: string
@@ -463,6 +465,7 @@ export type Database = {
           account_id?: string
           area?: number | null
           created_at?: string
+          deleted_at?: string | null
           id?: string
           location_id?: string
           name?: string
@@ -519,6 +522,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cleanup_old_deleted_tanks: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       current_user_is_account_member: {
         Args: { aid: string }
         Returns: boolean
