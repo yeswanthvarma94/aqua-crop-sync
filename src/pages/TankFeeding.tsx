@@ -8,12 +8,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { cropDayFromStartIST } from "@/lib/time";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/state/AuthContext";
+import { CalendarIcon, Edit2, Trash2 } from "lucide-react";
 
 
 interface Tank { id: string; locationId: string; name: string; type: "shrimp" | "fish" }
@@ -35,6 +38,7 @@ interface StockRecord {
 }
 
 interface FeedingEntry {
+  id: string;
   schedule: string;
   stockName: string;
   unit: StockRecord["unit"];
@@ -116,7 +120,8 @@ const TankFeeding = () => {
   const dayCounter = hasActiveCrop && seedDate ? cropDayFromStartIST(seedDate) : null;
 
   // Feeding state
-  const todayKey = format(new Date(), "yyyy-MM-dd");
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const selectedDateKey = format(selectedDate, "yyyy-MM-dd");
   const [stocks, setStocks] = useState<StockRecord[]>([]);
   const feedStocks = useMemo(() => stocks.filter(s => s.category === "feed"), [stocks]);
   const [selectedStockId, setSelectedStockId] = useState<string>("");
@@ -132,6 +137,7 @@ const TankFeeding = () => {
   });
   const [notes, setNotes] = useState<string>("");
   const [entries, setEntries] = useState<FeedingEntry[]>([]);
+  const [totalConsumption, setTotalConsumption] = useState<number>(0);
   const [rev, setRev] = useState(0);
   const [editingFeeding, setEditingFeeding] = useState<any>(null);
 
@@ -151,14 +157,14 @@ const TankFeeding = () => {
       if (!locationId || !tankId) return;
       
       try {
-        const startOfDay = new Date();
+        const startOfDay = new Date(selectedDate);
         startOfDay.setHours(0, 0, 0, 0);
-        const endOfDay = new Date();
+        const endOfDay = new Date(selectedDate);
         endOfDay.setHours(23, 59, 59, 999);
 
         const { data, error } = await supabase
           .from("feeding_logs")
-          .select("schedule, quantity, fed_at, notes, stock_id")
+          .select("id, schedule, quantity, fed_at, notes, stock_id")
           .eq("account_id", accountId as string)
           .eq("location_id", locationId)
           .eq("tank_id", tankId)
@@ -171,6 +177,7 @@ const TankFeeding = () => {
         const feedingEntries: FeedingEntry[] = (data || []).map((entry: any) => {
           const stock = stocks.find(s => s.id === entry.stock_id);
           return {
+            id: entry.id,
             schedule: entry.schedule || "",
             stockName: stock?.name || "Feed",
             unit: (stock?.unit as StockRecord["unit"]) || "kg",
@@ -189,18 +196,66 @@ const TankFeeding = () => {
     };
 
     loadFeedingEntries();
-    // Refresh when stocks change to resolve names/units for loaded entries
-  }, [accountId, locationId, tankId, todayKey, rev, stocks]);
+  }, [accountId, locationId, tankId, selectedDateKey, rev, stocks]);
+
+  // Load total consumption from crop start
+  useEffect(() => {
+    const loadTotalConsumption = async () => {
+      if (!locationId || !tankId || !hasActiveCrop || !seedDate) return;
+      
+      try {
+        const { data, error } = await supabase
+          .from("feeding_logs")
+          .select("quantity")
+          .eq("account_id", accountId as string)
+          .eq("location_id", locationId)
+          .eq("tank_id", tankId)
+          .gte("fed_at", seedDate.toISOString());
+
+        if (error) throw error;
+
+        const total = (data || []).reduce((sum: number, entry: any) => sum + Number(entry.quantity), 0);
+        setTotalConsumption(total);
+      } catch (error) {
+        console.error("Error loading total consumption:", error);
+        setTotalConsumption(0);
+      }
+    };
+
+    loadTotalConsumption();
+  }, [accountId, locationId, tankId, hasActiveCrop, seedDate, rev]);
 
   const completed = useMemo(() => new Set(entries.map(e => e.schedule)), [entries]);
   const remainingStock = selectedStock?.quantity ?? 0;
 
-  const onEditFeeding = (entry: any, feedingId: string) => {
-    setEditingFeeding({ ...entry, id: feedingId });
+  const onEditFeeding = (entry: FeedingEntry) => {
+    setEditingFeeding(entry);
     setSchedule(entry.schedule);
     setQuantity(entry.quantity);
     setTimeStr(entry.time);
     setNotes(entry.notes || "");
+    // Find and set the stock
+    const stock = stocks.find(s => s.name === entry.stockName);
+    if (stock) {
+      setSelectedStockId(stock.id);
+    }
+  };
+
+  const onDeleteFeeding = async (feedingId: string) => {
+    try {
+      const { error } = await supabase
+        .from("feeding_logs")
+        .delete()
+        .eq("id", feedingId);
+
+      if (error) throw error;
+
+      setRev(r => r + 1);
+      toast({ title: "Deleted", description: "Feeding entry removed successfully" });
+    } catch (error) {
+      console.error("Error deleting feeding entry:", error);
+      toast({ title: "Error", description: "Failed to delete feeding entry" });
+    }
   };
 
   const saveFeedingEntry = async () => {
@@ -213,8 +268,8 @@ const TankFeeding = () => {
       toast({ title: "Select schedule", description: "Choose a feeding schedule." });
       return;
     }
-    if (completed.has(schedule)) {
-      toast({ title: "Schedule done", description: "This schedule is already completed for today." });
+    if (!editingFeeding && completed.has(schedule)) {
+      toast({ title: "Schedule done", description: "This schedule is already completed for selected date." });
       return;
     }
     if (!selectedStock) {
@@ -231,63 +286,78 @@ const TankFeeding = () => {
     }
 
     try {
-      // Create feeding time with today's date and selected time
+      // Create feeding time with selected date and time
       const [hours, minutes] = timeStr.split(':').map(Number);
-      const feedingTime = new Date();
+      const feedingTime = new Date(selectedDate);
       feedingTime.setHours(hours, minutes, 0, 0);
 
-      // Save feeding entry to Supabase with weighted average price
       const weightedAvgPrice = selectedStock.pricePerUnit || 0;
-      const { error: feedingError } = await supabase
-        .from("feeding_logs")
-        .insert({
-          account_id: accountId,
-          location_id: locationId,
-          tank_id: tankId,
-          stock_id: selectedStock.id,
-          schedule: schedule,
-          quantity: quantity,
-          fed_at: feedingTime.toISOString(),
-          price_per_unit: weightedAvgPrice, // Store weighted average price at time of feeding
-          notes: notes || null,
-        });
 
-      if (feedingError) {
-        throw feedingError;
+      if (editingFeeding) {
+        // Update existing feeding entry
+        const { error: feedingError } = await supabase
+          .from("feeding_logs")
+          .update({
+            schedule: schedule,
+            quantity: quantity,
+            fed_at: feedingTime.toISOString(),
+            notes: notes || null,
+          })
+          .eq("id", editingFeeding.id);
+
+        if (feedingError) throw feedingError;
+        toast({ title: "Updated", description: "Feeding entry updated successfully" });
+      } else {
+        // Create new feeding entry
+        const { error: feedingError } = await supabase
+          .from("feeding_logs")
+          .insert({
+            account_id: accountId,
+            location_id: locationId,
+            tank_id: tankId,
+            stock_id: selectedStock.id,
+            schedule: schedule,
+            quantity: quantity,     
+            fed_at: feedingTime.toISOString(),
+            price_per_unit: weightedAvgPrice,
+            notes: notes || null,
+          });
+
+        if (feedingError) throw feedingError;
+
+        // Update stock quantity in database
+        const nextQty = Math.max(0, selectedStock.quantity - quantity);
+        await supabase
+          .from("stocks")
+          .update({ quantity: nextQty })
+          .eq("id", selectedStock.id);
+
+        // Create an expense row for consumed feed
+        const feedAmount = quantity * weightedAvgPrice;
+        const incurredDate = feedingTime.toISOString().slice(0, 10);
+        await supabase
+          .from("expenses")
+          .insert({
+            account_id: accountId,
+            location_id: locationId,
+            tank_id: tankId,
+            category: "feed",
+            name: `${selectedStock.name} feed`,
+            description: `Auto-added for feeding schedule ${schedule} (₹${weightedAvgPrice.toFixed(2)}/unit)`,
+            amount: feedAmount,
+            incurred_at: incurredDate,
+            notes: notes || null,
+          });
+
+        toast({ title: "Saved", description: `Schedule ${schedule} feeding recorded` });
       }
-
-      // Update stock quantity in database
-      const nextQty = Math.max(0, selectedStock.quantity - quantity);
-      const { error: stockError } = await supabase
-        .from("stocks")
-        .update({ quantity: nextQty })
-        .eq("id", selectedStock.id);
-
-      // Create an expense row for consumed feed using weighted average price
-      const feedAmount = quantity * weightedAvgPrice;
-      const incurredDate = feedingTime.toISOString().slice(0, 10);
-      const { error: expenseError } = await supabase
-        .from("expenses")
-        .insert({
-          account_id: accountId,
-          location_id: locationId,
-          tank_id: tankId,
-          category: "feed",
-          name: `${selectedStock.name} feed`,
-          description: `Auto-added for feeding schedule ${schedule} (₹${weightedAvgPrice.toFixed(2)}/unit)`,
-          amount: feedAmount,
-          incurred_at: incurredDate,
-          notes: notes || null,
-        });
-
-      if (expenseError) throw expenseError;
 
       setSchedule("");
       setQuantity(0);
       setNotes("");
+      setSelectedStockId("");
       setEditingFeeding(null);
       setRev((r) => r + 1);
-      toast({ title: "Saved", description: `Schedule ${schedule} feeding recorded` });
     } catch (error) {
       console.error("Error saving feeding entry:", error);
       toast({ title: "Error", description: "Failed to save feeding entry" });
@@ -302,17 +372,41 @@ const TankFeeding = () => {
           <Button variant="outline" size="sm" onClick={() => navigate(`/locations/${locationId}/tanks`)}>← Tanks</Button>
           <h1 className="text-xl font-semibold">Feeding — { name || "Tank" }</h1>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={() => navigate("/")}>Home</Button>
-          {hasActiveCrop && (
-            <span className="text-sm text-muted-foreground">Day {dayCounter}</span>
+        <div className="flex items-center gap-4">
+          {hasActiveCrop && totalConsumption > 0 && (
+            <div className="text-sm text-muted-foreground">
+              <div className="font-medium">Total Feed: {totalConsumption} kg</div>
+              <div>Day {dayCounter}</div>
+            </div>
           )}
+          <Button variant="secondary" size="sm" onClick={() => navigate("/")}>Home</Button>
         </div>
       </header>
 
       <Card>
         <CardHeader>
-          <CardTitle>Feeding — Today</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Feeding</CardTitle>
+            <div className="flex items-center gap-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="w-[240px] justify-start text-left font-normal">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                  <Calendar
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={(date) => date && setSelectedDate(date)}
+                    disabled={(date) => date > new Date() || (hasActiveCrop && seedDate ? date < seedDate : false)}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {!hasActiveCrop ? (
@@ -376,23 +470,57 @@ const TankFeeding = () => {
                 </div>
               </div>
 
-              <div>
-                <Button onClick={saveFeedingEntry} disabled={!hasActiveCrop || !schedule || completed.has(schedule) || !selectedStock || quantity <= 0 || quantity > remainingStock}>Save Feeding</Button>
+              <div className="flex gap-2">
+                <Button onClick={saveFeedingEntry} disabled={!hasActiveCrop || !schedule || (!editingFeeding && completed.has(schedule)) || !selectedStock || quantity <= 0 || quantity > remainingStock}>
+                  {editingFeeding ? "Update Feeding" : "Save Feeding"}
+                </Button>
+                {editingFeeding && (
+                  <Button variant="outline" onClick={() => {
+                    setEditingFeeding(null);
+                    setSchedule("");
+                    setQuantity(0);
+                    setNotes("");
+                    setSelectedStockId("");
+                  }}>
+                    Cancel
+                  </Button>
+                )}
               </div>
 
               <div className="pt-2">
-                <h3 className="text-sm font-medium mb-2">Today's feedings</h3>
+                <h3 className="text-sm font-medium mb-2">
+                  {format(selectedDate, "MMM d, yyyy")} feedings
+                </h3>
                 {entries.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No entries yet.</p>
+                  <p className="text-sm text-muted-foreground">No entries for this date.</p>
                 ) : (
                   <ul className="space-y-2 text-sm">
-                    {entries.map((e, idx) => (
-                      <li key={idx} className="flex items-center justify-between rounded-md border p-2">
-                        <div className="flex items-center gap-3">
+                    {entries.map((e) => (
+                      <li key={e.id} className="flex items-center justify-between rounded-md border p-3">
+                        <div className="flex items-center gap-3 flex-1">
                           <Badge variant="secondary">{type === "shrimp" ? `S${e.schedule}` : `F${e.schedule}`}</Badge>
                           <span>{e.quantity} {e.unit} • {e.stockName}</span>
+                          {e.notes && <span className="text-muted-foreground text-xs">({e.notes})</span>}
                         </div>
-                        <div className="text-muted-foreground">{e.time}</div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">{e.time}</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onEditFeeding(e)}
+                            className="h-6 w-6 p-0"
+                          >
+                            <Edit2 className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onDeleteFeeding(e.id)}
+                            className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
                       </li>
                     ))}
                   </ul>
