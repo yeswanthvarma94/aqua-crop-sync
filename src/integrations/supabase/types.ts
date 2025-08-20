@@ -134,6 +134,7 @@ export type Database = {
           id: string
           location_id: string | null
           notes: string | null
+          price_per_unit: number | null
           quantity: number
           schedule: string | null
           stock_id: string | null
@@ -147,6 +148,7 @@ export type Database = {
           id?: string
           location_id?: string | null
           notes?: string | null
+          price_per_unit?: number | null
           quantity: number
           schedule?: string | null
           stock_id?: string | null
@@ -160,6 +162,7 @@ export type Database = {
           id?: string
           location_id?: string | null
           notes?: string | null
+          price_per_unit?: number | null
           quantity?: number
           schedule?: string | null
           stock_id?: string | null
@@ -211,6 +214,7 @@ export type Database = {
           location_id: string | null
           logged_at: string
           note: string | null
+          price_per_unit: number | null
           quantity: number
           stock_id: string | null
           tank_id: string | null
@@ -223,6 +227,7 @@ export type Database = {
           location_id?: string | null
           logged_at?: string
           note?: string | null
+          price_per_unit?: number | null
           quantity: number
           stock_id?: string | null
           tank_id?: string | null
@@ -235,6 +240,7 @@ export type Database = {
           location_id?: string | null
           logged_at?: string
           note?: string | null
+          price_per_unit?: number | null
           quantity?: number
           stock_id?: string | null
           tank_id?: string | null

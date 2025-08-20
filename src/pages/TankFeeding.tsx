@@ -236,7 +236,8 @@ const TankFeeding = () => {
       const feedingTime = new Date();
       feedingTime.setHours(hours, minutes, 0, 0);
 
-      // Save feeding entry to Supabase
+      // Save feeding entry to Supabase with weighted average price
+      const weightedAvgPrice = selectedStock.pricePerUnit || 0;
       const { error: feedingError } = await supabase
         .from("feeding_logs")
         .insert({
@@ -247,6 +248,7 @@ const TankFeeding = () => {
           schedule: schedule,
           quantity: quantity,
           fed_at: feedingTime.toISOString(),
+          price_per_unit: weightedAvgPrice, // Store weighted average price at time of feeding
           notes: notes || null,
         });
 
@@ -261,8 +263,8 @@ const TankFeeding = () => {
         .update({ quantity: nextQty })
         .eq("id", selectedStock.id);
 
-      // Create an expense row for consumed feed
-      const feedAmount = quantity * (selectedStock.pricePerUnit || 0);
+      // Create an expense row for consumed feed using weighted average price
+      const feedAmount = quantity * weightedAvgPrice;
       const incurredDate = feedingTime.toISOString().slice(0, 10);
       const { error: expenseError } = await supabase
         .from("expenses")
@@ -272,7 +274,7 @@ const TankFeeding = () => {
           tank_id: tankId,
           category: "feed",
           name: `${selectedStock.name} feed`,
-          description: `Auto-added for feeding schedule ${schedule}`,
+          description: `Auto-added for feeding schedule ${schedule} (₹${weightedAvgPrice.toFixed(2)}/unit)`,
           amount: feedAmount,
           incurred_at: incurredDate,
           notes: notes || null,

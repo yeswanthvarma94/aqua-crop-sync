@@ -196,13 +196,20 @@ const Stocks = () => {
         if (fetchErr) throw fetchErr;
 
         if (existing) {
-          const newQty = Number(existing.quantity || 0) + Number(quantity);
-          const newTotal = Number(existing.total_amount || 0) + amountDelta;
+          const existingQty = Number(existing.quantity || 0);
+          const existingTotal = Number(existing.total_amount || 0);
+          const newQty = existingQty + Number(quantity);
+          const newTotal = existingTotal + amountDelta;
+          
+          // Calculate weighted average price: (existing_qty * existing_avg_price + new_qty * new_price) / total_qty
+          const existingAvgPrice = existingQty > 0 ? existingTotal / existingQty : 0;
+          const weightedAvgPrice = newQty > 0 ? ((existingQty * existingAvgPrice) + (Number(quantity) * Number(pricePerUnit))) / newQty : 0;
+          
           const { error: updErr } = await supabase
             .from("stocks")
             .update({
               quantity: newQty,
-              price_per_unit: pricePerUnit,
+              price_per_unit: weightedAvgPrice, // Use weighted average instead of latest price
               min_stock: minStock,
               expiry_date: expiryDateStr,
               notes: notes || null,

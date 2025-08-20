@@ -178,7 +178,8 @@ const Materials = () => {
       // Compute logged_at from selected date (todayKey) and time
       const loggedAt = new Date(`${todayKey}T${timeStr}:00.000Z`);
 
-      // 1) Insert material log
+      // 1) Insert material log with weighted average price
+      const weightedAvgPrice = selectedStock.pricePerUnit || 0;
       const { error: logError } = await supabase.from("material_logs").insert([
         {
           account_id: accountId,
@@ -186,6 +187,7 @@ const Materials = () => {
           tank_id: tank.id,
           stock_id: selectedStock.id,
           quantity,
+          price_per_unit: weightedAvgPrice, // Store weighted average price at time of usage
           note: notes || null,
           logged_at: loggedAt.toISOString(),
         },
@@ -207,11 +209,29 @@ const Materials = () => {
         .eq("id", selectedStock.id);
       if (stockUpdateError) throw stockUpdateError;
 
+      // 3) Create expense for material usage
+      const materialAmount = quantity * weightedAvgPrice;
+      const incurredDate = loggedAt.toISOString().slice(0, 10);
+      const { error: expenseError } = await supabase
+        .from("expenses")
+        .insert({
+          account_id: accountId,
+          location_id: location.id,
+          tank_id: tank.id,
+          category: selectedStock.category,
+          name: `${selectedStock.name} ${selectedStock.category}`,
+          description: `Auto-added for material usage (₹${weightedAvgPrice.toFixed(2)}/unit)`,
+          amount: materialAmount,
+          incurred_at: incurredDate,
+          notes: notes || null,
+        });
+      if (expenseError) throw expenseError;
+
       // Reset inputs and refresh
       setQuantity(0);
       setNotes("");
       setEditingMaterial(null);
-      toast({ title: "Saved", description: `${selectedStock.name} — ${quantity} ${selectedStock.unit}` });
+      toast({ title: "Saved", description: `${selectedStock.name} — ${quantity} ${selectedStock.unit} (₹${materialAmount.toFixed(2)})` });
       setRev((r) => r + 1);
     } catch (e) {
       toast({ title: "Error", description: "Failed to save. Please try again.", variant: "destructive" });
