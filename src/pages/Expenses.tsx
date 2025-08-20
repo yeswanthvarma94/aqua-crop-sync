@@ -614,12 +614,12 @@ const Expenses = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {entries.length === 0 ? (
+                    {entries.filter(e => e.category !== 'feed' && e.category !== 'medicine').length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center text-muted-foreground">No expenses added yet.</TableCell>
+                        <TableCell colSpan={5} className="text-center text-muted-foreground">No manual expenses added yet.</TableCell>
                       </TableRow>
                     ) : (
-                      entries.slice(0, 10).map((e) => (
+                      entries.filter(e => e.category !== 'feed' && e.category !== 'medicine').slice(0, 10).map((e) => (
                         <TableRow key={e.id}>
                           <TableCell className="capitalize">{categoryLabel[e.category]}</TableCell>
                           <TableCell>{e.name}</TableCell>
