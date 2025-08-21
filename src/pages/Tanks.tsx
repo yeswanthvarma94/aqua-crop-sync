@@ -75,6 +75,7 @@ const Tanks = () => {
   const { toast } = useToast();
   const [rev, setRev] = useState(0);
   const { accountId } = useAuth();
+  const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({});
 
   useSEO("Tanks | AquaLedger", "Manage tanks for the selected location. Add, view, and open details.");
 
@@ -323,6 +324,11 @@ const Tanks = () => {
       return;
     }
     
+    const loadingKey = `start-${t.id}`;
+    if (loadingStates[loadingKey]) return; // Prevent multiple clicks
+    
+    setLoadingStates(prev => ({ ...prev, [loadingKey]: true }));
+    
     try {
       console.log("Starting crop for tank:", t.id, "Account ID:", accountId);
       const now = nowIST();
@@ -340,9 +346,14 @@ const Tanks = () => {
       console.log("Crop started successfully");
       setRev((r) => r + 1);
       toast({ title: "Crop Started", description: `${t.name}: crop started successfully` });
-    } catch (e) {
+    } catch (e: any) {
       console.error("Failed to start crop:", e);
-      toast({ title: "Error", description: "Failed to start crop. Please try again.", variant: "destructive" });
+      const errorMessage = e?.message?.includes('duplicate') 
+        ? 'A crop is already active for this tank'
+        : 'Failed to start crop. Please try again.';
+      toast({ title: "Error", description: errorMessage, variant: "destructive" });
+    } finally {
+      setLoadingStates(prev => ({ ...prev, [loadingKey]: false }));
     }
   };
 
@@ -351,6 +362,11 @@ const Tanks = () => {
       toast({ title: "Error", description: "Account ID not found.", variant: "destructive" });
       return;
     }
+    
+    const loadingKey = `end-${t.id}`;
+    if (loadingStates[loadingKey]) return; // Prevent multiple clicks
+    
+    setLoadingStates(prev => ({ ...prev, [loadingKey]: true }));
     
     try {
       console.log("Ending crop for tank:", t.id, "Account ID:", accountId);
@@ -372,9 +388,14 @@ const Tanks = () => {
       console.log("Crop ended successfully");
       setRev((r) => r + 1);
       toast({ title: "Crop Ended", description: `${t.name}: crop ended successfully` });
-    } catch (e) {
+    } catch (e: any) {
       console.error("Failed to end crop:", e);
-      toast({ title: "Error", description: "Failed to end crop. Please try again.", variant: "destructive" });
+      const errorMessage = e?.message?.includes('no rows') 
+        ? 'No active crop found for this tank'
+        : 'Failed to end crop. Please try again.';
+      toast({ title: "Error", description: errorMessage, variant: "destructive" });
+    } finally {
+      setLoadingStates(prev => ({ ...prev, [loadingKey]: false }));
     }
   };
 
@@ -583,11 +604,17 @@ const Tanks = () => {
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <div className="flex gap-2">
                           <Button variant="outline" size="sm" onClick={() => onEditTank(t)}>Edit</Button>
-                          {d?.seedDate && !d?.cropEnd ? (
-                            <Button variant="destructive" size="sm" onClick={() => onEndCrop(t)}>End Crop</Button>
-                          ) : (
-                            <Button variant="outline" size="sm" onClick={() => onStartCrop(t)}>Start Crop</Button>
-                          )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={loadingStates[`${d?.seedDate && !d?.cropEnd ? 'end' : 'start'}-${t.id}`]}
+                          onClick={() => d?.seedDate && !d?.cropEnd ? onEndCrop(t) : onStartCrop(t)}
+                        >
+                          {loadingStates[`${d?.seedDate && !d?.cropEnd ? 'end' : 'start'}-${t.id}`] 
+                            ? "Processing..." 
+                            : d?.seedDate && !d?.cropEnd ? "End Crop" : "Start Crop"
+                          }
+                        </Button>
                           <Button variant="destructive" size="sm" onClick={() => onDeleteTank(t)}>Delete</Button>
                         </div>
                       </TableCell>

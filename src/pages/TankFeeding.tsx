@@ -140,6 +140,7 @@ const TankFeeding = () => {
   const [totalConsumption, setTotalConsumption] = useState<number>(0);
   const [rev, setRev] = useState(0);
   const [editingFeeding, setEditingFeeding] = useState<any>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -259,6 +260,8 @@ const TankFeeding = () => {
   };
 
   const saveFeedingEntry = async () => {
+    if (isSaving) return; // Prevent multiple clicks
+    
     if (!hasActiveCrop) {
       toast({ title: "Inactive tank", description: "Start crop to record feeding." });
       return;
@@ -285,6 +288,7 @@ const TankFeeding = () => {
       return;
     }
 
+    setIsSaving(true);
     try {
       // Create feeding time with selected date and time
       const [hours, minutes] = timeStr.split(':').map(Number);
@@ -358,9 +362,16 @@ const TankFeeding = () => {
       setSelectedStockId("");
       setEditingFeeding(null);
       setRev((r) => r + 1);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving feeding entry:", error);
-      toast({ title: "Error", description: "Failed to save feeding entry" });
+      const errorMessage = error?.message?.includes('insufficient') 
+        ? 'Insufficient stock quantity available'
+        : error?.message?.includes('duplicate')
+        ? 'This feeding schedule already exists for the selected date'
+        : 'Failed to save feeding entry. Please try again.';
+      toast({ title: "Error", description: errorMessage, variant: "destructive" });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -471,9 +482,9 @@ const TankFeeding = () => {
               </div>
 
               <div className="flex gap-2">
-                <Button onClick={saveFeedingEntry} disabled={!hasActiveCrop || !schedule || (!editingFeeding && completed.has(schedule)) || !selectedStock || quantity <= 0 || quantity > remainingStock}>
-                  {editingFeeding ? "Update Feeding" : "Save Feeding"}
-                </Button>
+              <Button onClick={saveFeedingEntry} disabled={isSaving}>
+                {isSaving ? "Saving..." : editingFeeding ? "Update Feeding" : "Save Feeding"}
+              </Button>
                 {editingFeeding && (
                   <Button variant="outline" onClick={() => {
                     setEditingFeeding(null);

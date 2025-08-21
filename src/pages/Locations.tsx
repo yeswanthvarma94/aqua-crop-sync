@@ -64,6 +64,7 @@ const Locations = () => {
       .from("locations")
       .select("id, name, address, account_id")
       .eq("account_id", accountId)
+      .is("deleted_at", null) // Only load non-deleted locations
       .order("created_at", { ascending: false });
     if (!error) setLocations(data as any);
   };
@@ -131,25 +132,36 @@ const Locations = () => {
     setOpen(true);
   };
 
-  const onDelete = async (id: string) => {
-    if (!window.confirm("Are you sure you want to delete this farm? This action cannot be undone.")) {
+  const onDelete = async (location: Location) => {
+    if (!window.confirm(`Are you sure you want to delete "${location.name}"? This will move it to the recycle bin.`)) {
       return;
     }
     
     try {
-      console.log("Deleting location:", id, "Account ID:", accountId);
-      const { error } = await supabase.from("locations").delete().eq("id", id).eq("account_id", accountId);
+      console.log("Deleting location:", location.id, "Account ID:", accountId);
+      
+      // Soft delete - add deleted_at timestamp instead of hard delete
+      const { error } = await supabase
+        .from("locations")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", location.id)
+        .eq("account_id", accountId);
+        
       if (error) {
         console.error("Delete error:", error);
         throw error;
       }
-      toast({ title: "Farm Deleted Successfully" });
+      
+      toast({ title: "Farm Deleted", description: `${location.name} has been moved to recycle bin` });
       await load();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to delete location:", error);
+      const errorMessage = error?.message?.includes('foreign key') 
+        ? 'Cannot delete farm with existing tanks. Delete tanks first.'
+        : 'Failed to delete farm. Please try again.';
       toast({
         title: "Error",
-        description: "Failed to delete farm. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
     }
@@ -225,7 +237,7 @@ const Locations = () => {
                       <Button variant="outline" size="sm" onClick={() => onEdit(loc)}>
                         <Pencil className="mr-1" size={16} /> Edit
                       </Button>
-                      <Button variant="destructive" size="sm" onClick={() => onDelete(loc.id)}>
+                      <Button variant="destructive" size="sm" onClick={() => onDelete(loc)}>
                         <Trash2 className="mr-1" size={16} /> Delete
                       </Button>
                     </TableCell>
