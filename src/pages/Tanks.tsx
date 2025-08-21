@@ -351,7 +351,12 @@ const Tanks = () => {
   };
 
   const onDeleteTank = async (t: Tank) => {
+    if (!window.confirm(`Are you sure you want to delete "${t.name}"? This will move it to the recycle bin.`)) {
+      return;
+    }
+    
     try {
+      console.log("Deleting tank:", t.id, "Account ID:", accountId);
       // Soft delete - move to recycle bin
       const { error } = await supabase
         .from("tanks")
@@ -359,11 +364,15 @@ const Tanks = () => {
         .eq("id", t.id)
         .eq("account_id", accountId);
       
-      if (error) throw error;
+      if (error) {
+        console.error("Delete error:", error);
+        throw error;
+      }
       setRev((r) => r + 1);
-      toast({ title: "Moved to Recycle Bin", description: `${t.name} has been moved to recycle bin` });
+      toast({ title: "Tank Deleted", description: `${t.name} has been moved to recycle bin` });
     } catch (e) {
-      toast({ title: "Error", description: "Failed to delete tank.", variant: "destructive" });
+      console.error("Failed to delete tank:", e);
+      toast({ title: "Error", description: "Failed to delete tank. Please try again.", variant: "destructive" });
     }
   };
 

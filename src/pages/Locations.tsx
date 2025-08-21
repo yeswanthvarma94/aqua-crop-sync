@@ -132,15 +132,24 @@ const Locations = () => {
   };
 
   const onDelete = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete this farm? This action cannot be undone.")) {
+      return;
+    }
+    
     try {
+      console.log("Deleting location:", id, "Account ID:", accountId);
       const { error } = await supabase.from("locations").delete().eq("id", id).eq("account_id", accountId);
-      if (error) throw error;
-      toast({ title: "Deleted" });
+      if (error) {
+        console.error("Delete error:", error);
+        throw error;
+      }
+      toast({ title: "Farm Deleted Successfully" });
       await load();
     } catch (error) {
+      console.error("Failed to delete location:", error);
       toast({
         title: "Error",
-        description: "Failed to delete. Please try again.",
+        description: "Failed to delete farm. Please try again.",
         variant: "destructive",
       });
     }
