@@ -318,35 +318,63 @@ const Tanks = () => {
   };
 
   const onStartCrop = async (t: Tank) => {
+    if (!accountId) {
+      toast({ title: "Error", description: "Account ID not found.", variant: "destructive" });
+      return;
+    }
+    
     try {
+      console.log("Starting crop for tank:", t.id, "Account ID:", accountId);
       const now = nowIST();
       const seedDate = now.toISOString().slice(0, 10);
+      
       const { error } = await supabase.from("tank_crops").insert([
         { account_id: accountId, tank_id: t.id, seed_date: seedDate, end_date: null },
       ]);
-      if (error) throw error;
+      
+      if (error) {
+        console.error("Start crop error:", error);
+        throw error;
+      }
+      
+      console.log("Crop started successfully");
       setRev((r) => r + 1);
-      toast({ title: "Saved", description: `${t.name}: start crop` });
+      toast({ title: "Crop Started", description: `${t.name}: crop started successfully` });
     } catch (e) {
-      toast({ title: "Error", description: "Failed to start crop.", variant: "destructive" });
+      console.error("Failed to start crop:", e);
+      toast({ title: "Error", description: "Failed to start crop. Please try again.", variant: "destructive" });
     }
   };
 
   const onEndCrop = async (t: Tank) => {
+    if (!accountId) {
+      toast({ title: "Error", description: "Account ID not found.", variant: "destructive" });
+      return;
+    }
+    
     try {
+      console.log("Ending crop for tank:", t.id, "Account ID:", accountId);
       const now = new Date();
       const endDate = now.toISOString().slice(0, 10);
+      
       const { error } = await supabase
         .from("tank_crops")
         .update({ end_date: endDate })
         .eq("tank_id", t.id)
         .eq("account_id", accountId)
         .is("end_date", null);
-      if (error) throw error;
+        
+      if (error) {
+        console.error("End crop error:", error);
+        throw error;
+      }
+      
+      console.log("Crop ended successfully");
       setRev((r) => r + 1);
-      toast({ title: "Saved", description: `${t.name}: end crop` });
+      toast({ title: "Crop Ended", description: `${t.name}: crop ended successfully` });
     } catch (e) {
-      toast({ title: "Error", description: "Failed to end crop.", variant: "destructive" });
+      console.error("Failed to end crop:", e);
+      toast({ title: "Error", description: "Failed to end crop. Please try again.", variant: "destructive" });
     }
   };
 
