@@ -404,23 +404,31 @@ const Tanks = () => {
     try {
       console.log("Deleting tank:", t.id, "Account ID:", accountId);
       // Soft delete - move to recycle bin
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("tanks")
         .update({ deleted_at: new Date().toISOString() })
         .eq("id", t.id)
-        .eq("account_id", accountId);
+        .eq("account_id", accountId)
+        .select();
       
       if (error) {
         console.error("Delete error:", error);
         throw error;
       }
+      
+      // Check if any rows were actually updated
+      if (!data || data.length === 0) {
+        throw new Error("No records were updated. Tank may not exist or you may not have permission.");
+      }
+      
+      console.log("Successfully soft deleted tank:", data[0]);
       setRev((r) => r + 1);
       toast({ title: "Tank Deleted", description: `${t.name} has been moved to recycle bin` });
     } catch (e: any) {
       console.error("Failed to delete tank:", e);
       const errorMessage = e?.message?.includes('foreign key') 
         ? 'Cannot delete tank with active data. End crop and clear logs first.'
-        : 'Failed to delete tank. Please try again.';
+        : e?.message || 'Failed to delete tank. Please try again.';
       toast({ title: "Error", description: errorMessage, variant: "destructive" });
     }
   };
