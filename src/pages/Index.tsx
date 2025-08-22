@@ -3,10 +3,60 @@ import SyncBadge from "@/components/SyncBadge";
 import QuickActionsGrid from "@/components/QuickActionsGrid";
 import TabBar from "@/components/TabBar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { formatIST, nowIST } from "@/lib/time";
 import LanguageSelector from "@/components/LanguageSelector";
+import { useAuth } from "@/state/AuthContext";
+import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 const Index = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [authStatus, setAuthStatus] = useState<string>("checking");
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          setAuthStatus("authenticated");
+        } else {
+          setAuthStatus("unauthenticated");
+        }
+      } catch (error) {
+        console.error("Auth check error:", error);
+        setAuthStatus("error");
+      }
+    };
+    
+    checkAuth();
+  }, []);
+
+  if (authStatus === "unauthenticated") {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="w-full max-w-md text-center">
+          <CardHeader>
+            <CardTitle className="text-red-600">Authentication Required</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              You need to be authenticated to use CRUD operations (create, edit, delete).
+            </p>
+            <Button onClick={() => navigate("/test-auth")} className="w-full">
+              Go to Authentication
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Current status: No Supabase session detected
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-10 glass-header">
