@@ -138,24 +138,31 @@ const Locations = () => {
       console.log("Deleting location:", location.id, "Account ID:", accountId);
       
       // Soft delete - add deleted_at timestamp instead of hard delete
-      const { error } = await supabase
+      const { data, error, count } = await supabase
         .from("locations")
         .update({ deleted_at: new Date().toISOString() })
         .eq("id", location.id)
-        .eq("account_id", accountId);
+        .eq("account_id", accountId)
+        .select();
         
       if (error) {
         console.error("Delete error:", error);
         throw error;
       }
       
+      // Check if any rows were actually updated
+      if (!data || data.length === 0) {
+        throw new Error("No records were updated. Location may not exist or you may not have permission.");
+      }
+      
+      console.log("Successfully soft deleted location:", data[0]);
       toast({ title: "Farm Deleted", description: `${location.name} has been moved to recycle bin` });
       await load();
     } catch (error: any) {
       console.error("Failed to delete location:", error);
       const errorMessage = error?.message?.includes('foreign key') 
         ? 'Cannot delete farm with existing tanks. Delete tanks first.'
-        : 'Failed to delete farm. Please try again.';
+        : error?.message || 'Failed to delete farm. Please try again.';
       toast({
         title: "Error",
         description: errorMessage,
