@@ -8,7 +8,6 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, BarChart, Bar, Legend } from "recharts";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
@@ -100,9 +99,6 @@ const RecycleBin = () => {
   const [activeCrop, setActiveCrop] = useState<TankDetail | null>(null);
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
-  const [abw, setAbw] = useState<number>(1);
-  const [fr, setFr] = useState<number>(2);
-  const [sr, setSr] = useState<number>(90);
 
   useSEO("Recycle Bin | AquaLedger", "View and restore deleted tanks from the recycle bin.");
 
@@ -314,6 +310,129 @@ const RecycleBin = () => {
     pdf.save(`deleted-tank-report-${selectedTank.name}-${format(new Date(), "yyyyMMdd-HHmm")}.pdf`);
   };
 
+  const exportCSV = () => {
+    if (!selectedTank) return;
+
+    // Group data by date
+    const dataByDate = new Map<string, {
+      date: string;
+      scheduleFeeds: Map<string, number>;
+      materials: Array<{ name: string; quantity: number; unit: string }>;
+      expenses: Array<{ name: string; amount: number }>;
+    }>();
+
+    const sDate = new Date(`${startDate}T00:00:00`);
+    const eDate = new Date(`${endDate}T23:59:59`);
+    const days: string[] = [];
+    for (let t = sDate.getTime(); t <= eDate.getTime(); t += 24*60*60*1000) {
+      days.push(format(new Date(t), "yyyy-MM-dd"));
+    }
+
+    // Initialize with date range
+    for (const day of days) {
+      dataByDate.set(day, {
+        date: day,
+        scheduleFeeds: new Map(),
+        materials: [],
+        expenses: []
+      });
+    }
+
+    // Process feeding data by schedule
+    feedEntries.forEach(entry => {
+      const day = entry.createdAt.slice(0, 10);
+      const dayData = dataByDate.get(day);
+      if (dayData && entry.unit === "kg") {
+        const current = dayData.scheduleFeeds.get(entry.schedule) || 0;
+        dayData.scheduleFeeds.set(entry.schedule, current + entry.quantity);
+      }
+    });
+
+    // Process materials data
+    materialEntries.forEach(entry => {
+      const day = entry.createdAt.slice(0, 10);
+      const dayData = dataByDate.get(day);
+      if (dayData) {
+        dayData.materials.push({
+          name: entry.stockName,
+          quantity: entry.quantity,
+          unit: entry.unit
+        });
+      }
+    });
+
+    // Process expenses data
+    expenseEntries.forEach(entry => {
+      const dayData = dataByDate.get(entry.date);
+      if (dayData) {
+        dayData.expenses.push({
+          name: entry.name,
+          amount: entry.amount
+        });
+      }
+    });
+
+    // Generate CSV content
+    const headers = [
+      "Date",
+      "Schedule 1",
+      "Schedule 2", 
+      "Schedule 3",
+      "Materials",
+      "Material Quantity Used",
+      "Expenses Name",
+      "Quantity Consumed Till Date",
+      "Total Amount"
+    ];
+
+    let csvContent = headers.join(",") + "\n";
+    let totalFeedConsumed = 0;
+    let totalExpenseAmount = 0;
+
+    const sortedDates = Array.from(dataByDate.keys()).sort();
+    
+    sortedDates.forEach(date => {
+      const dayData = dataByDate.get(date)!;
+      
+      const schedule1 = dayData.scheduleFeeds.get("Schedule 1") || 0;
+      const schedule2 = dayData.scheduleFeeds.get("Schedule 2") || 0;
+      const schedule3 = dayData.scheduleFeeds.get("Schedule 3") || 0;
+      
+      totalFeedConsumed += schedule1 + schedule2 + schedule3;
+      
+      const materials = dayData.materials.map(m => `${m.name} (${m.quantity} ${m.unit})`).join("; ");
+      const materialQty = dayData.materials.map(m => `${m.quantity} ${m.unit}`).join("; ");
+      const expenses = dayData.expenses.map(e => e.name).join("; ");
+      const expenseAmounts = dayData.expenses.reduce((sum, e) => sum + e.amount, 0);
+      totalExpenseAmount += expenseAmounts;
+
+      const row = [
+        date,
+        schedule1.toFixed(2),
+        schedule2.toFixed(2),
+        schedule3.toFixed(2),
+        materials || "",
+        materialQty || "",
+        expenses || "",
+        totalFeedConsumed.toFixed(2),
+        `₹${totalExpenseAmount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`
+      ];
+
+      csvContent += row.map(cell => `"${cell}"`).join(",") + "\n";
+    });
+
+    // Create and download file
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `deleted-tank-report-${selectedTank.name}-${format(new Date(), "yyyyMMdd-HHmm")}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // Calculate costs for the report
   const feedCost = useMemo(() => feedEntries.reduce((sum, e) => sum + (e.quantity * 0), 0), [feedEntries]);
   const materialsMedicineCost = useMemo(() => materialEntries.filter(m => m.category === "medicine").reduce((s, m) => s + (m.quantity * 0), 0), [materialEntries]);
@@ -409,6 +528,32 @@ const RecycleBin = () => {
               <>
                 <Card>
                   <CardHeader>
+                    <CardTitle>Date Range</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Start Date</Label>
+                        <Input 
+                          type="date" 
+                          value={startDate} 
+                          onChange={(e) => setStartDate(e.target.value)} 
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>End Date</Label>
+                        <Input 
+                          type="date" 
+                          value={endDate} 
+                          onChange={(e) => setEndDate(e.target.value)} 
+                        />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
                     <CardTitle>Tank Information</CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -484,6 +629,7 @@ const RecycleBin = () => {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowReport(false)}>Close</Button>
+            <Button variant="secondary" onClick={exportCSV}>Export CSV</Button>
             <Button onClick={exportPDF}>Export PDF</Button>
           </DialogFooter>
         </DialogContent>

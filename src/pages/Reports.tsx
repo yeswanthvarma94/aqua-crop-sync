@@ -9,7 +9,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useSelection } from "@/state/SelectionContext";
 import { useAuth } from "@/state/AuthContext";
 import { format } from "date-fns";
-import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, BarChart, Bar, Legend } from "recharts";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { supabase } from "@/integrations/supabase/client";
@@ -105,9 +104,6 @@ const Reports = () => {
   const defaultStart = useMemo(() => detail?.seedDate ? new Date(detail.seedDate) : new Date(Date.now() - 13*24*60*60*1000), [detail?.seedDate]);
   const [startDate, setStartDate] = useState<string>(format(defaultStart, "yyyy-MM-dd"));
   const [endDate, setEndDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
-  const [abw, setAbw] = useState<number>(1); // g
-  const [fr, setFr] = useState<number>(2); // %
-  const [sr, setSr] = useState<number>(90); // %
 
   // stocks will be loaded from Supabase based on entries used in the selected period
 
@@ -212,48 +208,6 @@ const Reports = () => {
   }, [sDate, eDate]);
 
   const initialStock = detail?.totalSeed ?? 0;
-  const recommendedFeedPerDay = useMemo(() => {
-    const rec = new Map<string, number>();
-    for (const d of days) {
-      const kg = (initialStock * abw * fr * sr) / 1000 / 100 / 100; // divide by 100 for % FR and SR
-      rec.set(d, Number.isFinite(kg) ? kg : 0);
-    }
-    return rec;
-  }, [days, initialStock, abw, fr, sr]);
-
-  const actualFeedPerDay = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const d of days) map.set(d, 0);
-    for (const e of feedEntries) {
-      const day = e.createdAt.slice(0,10);
-      if (!map.has(day)) map.set(day, 0);
-      // assume feed quantity is in kg when unit is kg, otherwise skip
-      if (e.unit === "kg") map.set(day, (map.get(day) || 0) + e.quantity);
-    }
-    return map;
-  }, [days, feedEntries]);
-
-  const fcrTrendData = useMemo(() => {
-    const data: { date: string; fcr?: number; actual: number; rec: number; biomass?: number }[] = [];
-    let cumFeed = 0;
-    for (const d of days) {
-      const actual = actualFeedPerDay.get(d) || 0;
-      const rec = recommendedFeedPerDay.get(d) || 0;
-      cumFeed += actual;
-      const biomass = fr > 0 ? actual / (fr/100) : undefined;
-      const fcr = biomass && biomass > 0 ? cumFeed / biomass : undefined;
-      data.push({ date: d, fcr, actual, rec, biomass });
-    }
-    return data;
-  }, [days, actualFeedPerDay, recommendedFeedPerDay, fr]);
-
-  const feedTable = useMemo(() => {
-    let cum = 0;
-    return fcrTrendData.map((r) => {
-      cum += r.actual || 0;
-      return { ...r, cum };
-    });
-  }, [fcrTrendData]);
 
   // costs in range
   const feedCost = useMemo(() => feedEntries.reduce((sum, e) => sum + (e.quantity * (priceByStockName.get(e.stockName) ?? 0)), 0), [feedEntries, priceByStockName]);
@@ -314,6 +268,122 @@ const Reports = () => {
     pdf.save(`tank-statement-${tank?.name || "report"}-${format(new Date(), "yyyyMMdd-HHmm")}.pdf`);
   };
 
+  const exportCSV = () => {
+    if (!location || !tank) return;
+
+    // Group data by date
+    const dataByDate = new Map<string, {
+      date: string;
+      scheduleFeeds: Map<string, number>;
+      materials: Array<{ name: string; quantity: number; unit: string }>;
+      expenses: Array<{ name: string; amount: number }>;
+    }>();
+
+    // Initialize with date range
+    for (const day of days) {
+      dataByDate.set(day, {
+        date: day,
+        scheduleFeeds: new Map(),
+        materials: [],
+        expenses: []
+      });
+    }
+
+    // Process feeding data by schedule
+    feedEntries.forEach(entry => {
+      const day = entry.createdAt.slice(0, 10);
+      const dayData = dataByDate.get(day);
+      if (dayData && entry.unit === "kg") {
+        const current = dayData.scheduleFeeds.get(entry.schedule) || 0;
+        dayData.scheduleFeeds.set(entry.schedule, current + entry.quantity);
+      }
+    });
+
+    // Process materials data
+    materialEntries.forEach(entry => {
+      const day = entry.createdAt.slice(0, 10);
+      const dayData = dataByDate.get(day);
+      if (dayData) {
+        dayData.materials.push({
+          name: entry.stockName,
+          quantity: entry.quantity,
+          unit: entry.unit
+        });
+      }
+    });
+
+    // Process expenses data
+    expenseEntries.forEach(entry => {
+      const dayData = dataByDate.get(entry.date);
+      if (dayData) {
+        dayData.expenses.push({
+          name: entry.name,
+          amount: entry.amount
+        });
+      }
+    });
+
+    // Generate CSV content
+    const headers = [
+      "Date",
+      "Schedule 1",
+      "Schedule 2", 
+      "Schedule 3",
+      "Materials",
+      "Material Quantity Used",
+      "Expenses Name",
+      "Quantity Consumed Till Date",
+      "Total Amount"
+    ];
+
+    let csvContent = headers.join(",") + "\n";
+    let totalFeedConsumed = 0;
+    let totalExpenseAmount = 0;
+
+    const sortedDates = Array.from(dataByDate.keys()).sort();
+    
+    sortedDates.forEach(date => {
+      const dayData = dataByDate.get(date)!;
+      
+      const schedule1 = dayData.scheduleFeeds.get("Schedule 1") || 0;
+      const schedule2 = dayData.scheduleFeeds.get("Schedule 2") || 0;
+      const schedule3 = dayData.scheduleFeeds.get("Schedule 3") || 0;
+      
+      totalFeedConsumed += schedule1 + schedule2 + schedule3;
+      
+      const materials = dayData.materials.map(m => `${m.name} (${m.quantity} ${m.unit})`).join("; ");
+      const materialQty = dayData.materials.map(m => `${m.quantity} ${m.unit}`).join("; ");
+      const expenses = dayData.expenses.map(e => e.name).join("; ");
+      const expenseAmounts = dayData.expenses.reduce((sum, e) => sum + e.amount, 0);
+      totalExpenseAmount += expenseAmounts;
+
+      const row = [
+        date,
+        schedule1.toFixed(2),
+        schedule2.toFixed(2),
+        schedule3.toFixed(2),
+        materials || "",
+        materialQty || "",
+        expenses || "",
+        totalFeedConsumed.toFixed(2),
+        `₹${totalExpenseAmount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`
+      ];
+
+      csvContent += row.map(cell => `"${cell}"`).join(",") + "\n";
+    });
+
+    // Create and download file
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `tank-report-${tank.name}-${format(new Date(), "yyyyMMdd-HHmm")}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur border-b">
@@ -322,6 +392,7 @@ const Reports = () => {
           <div className="mt-2 flex items-center justify-between">
             <h1 className="text-base font-semibold">Reports</h1>
             <div className="flex items-center gap-2">
+              <Button variant="secondary" size="sm" onClick={exportCSV}>Export CSV</Button>
               <Button variant="secondary" size="sm" onClick={exportPDF}>Export PDF</Button>
             </div>
           </div>
@@ -338,18 +409,13 @@ const Reports = () => {
           <>
             <Card>
               <CardHeader>
-                <CardTitle>Filters & Formula Inputs</CardTitle>
+                <CardTitle>Date Range</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2"><Label>Start date</Label><Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></div>
                   <div className="space-y-2"><Label>End date</Label><Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} /></div>
-                  <div className="space-y-2"><Label>Initial Stocking (pcs)</Label><Input type="number" value={initialStock} readOnly /></div>
-                  <div className="space-y-2"><Label>ABW (g)</Label><Input type="number" inputMode="decimal" step="any" value={abw} onChange={(e) => setAbw(Number(e.target.value))} /></div>
-                  <div className="space-y-2"><Label>FR (%)</Label><Input type="number" inputMode="decimal" step="any" value={fr} onChange={(e) => setFr(Number(e.target.value))} /></div>
-                  <div className="space-y-2"><Label>SR (%)</Label><Input type="number" inputMode="decimal" step="any" value={sr} onChange={(e) => setSr(Number(e.target.value))} /></div>
                 </div>
-                <p className="mt-3 text-xs text-muted-foreground">Formulas: Daily Feed (kg) = Initial Stocking × ABW × FR × SR / 1000. Biomass (kg) = Daily Feed (kg) ÷ FR(%). FCR = Cumulative Feed ÷ Biomass.</p>
               </CardContent>
             </Card>
 
@@ -454,69 +520,6 @@ const Reports = () => {
                 </CardContent>
               </Card>
             </div>
-
-            <Card>
-              <CardHeader><CardTitle>Feed per Day</CardTitle></CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={fcrTrendData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                    <YAxis yAxisId="left" tick={{ fontSize: 12 }} />
-                    <Tooltip />
-                    <Legend />
-                    <Bar yAxisId="left" dataKey="actual" name="Actual (kg)" fill="hsl(var(--primary))" />
-                    <Bar yAxisId="left" dataKey="rec" name="Recommended (kg)" fill="hsl(var(--secondary))" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader><CardTitle>FCR Trend</CardTitle></CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={260}>
-                  <LineChart data={fcrTrendData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <Tooltip />
-                    <Legend />
-                    <Line type="monotone" dataKey="fcr" name="FCR" stroke="hsl(var(--primary))" dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader><CardTitle>Feed per Day (table)</CardTitle></CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Actual (kg)</TableHead>
-                      <TableHead>Recommended (kg)</TableHead>
-                      <TableHead>Cumulative Feed (kg)</TableHead>
-                      <TableHead>Biomass (kg)</TableHead>
-                      <TableHead>FCR</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {feedTable.map((r) => (
-                      <TableRow key={r.date}>
-                        <TableCell>{r.date}</TableCell>
-                        <TableCell>{(r.actual ?? 0).toFixed(2)}</TableCell>
-                        <TableCell>{(r.rec ?? 0).toFixed(2)}</TableCell>
-                        <TableCell>{(r.cum ?? 0).toFixed(2)}</TableCell>
-                        <TableCell>{(r.biomass ?? 0).toFixed(2)}</TableCell>
-                        <TableCell>{r.fcr ? r.fcr.toFixed(2) : "—"}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
 
             <Card>
               <CardHeader><CardTitle>Costs (selected period)</CardTitle></CardHeader>
