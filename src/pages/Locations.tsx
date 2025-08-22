@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 import { Pencil, Trash2, ListTree } from "lucide-react";
 import { useSelection } from "@/state/SelectionContext";
@@ -133,10 +134,6 @@ const Locations = () => {
   };
 
   const onDelete = async (location: Location) => {
-    if (!window.confirm(`Are you sure you want to delete "${location.name}"? This will move it to the recycle bin.`)) {
-      return;
-    }
-    
     try {
       console.log("Deleting location:", location.id, "Account ID:", accountId);
       
@@ -237,9 +234,17 @@ const Locations = () => {
                       <Button variant="outline" size="sm" onClick={() => onEdit(loc)}>
                         <Pencil className="mr-1" size={16} /> Edit
                       </Button>
-                      <Button variant="destructive" size="sm" onClick={() => onDelete(loc)}>
-                        <Trash2 className="mr-1" size={16} /> Delete
-                      </Button>
+                      <ConfirmDialog
+                        title="Delete Farm"
+                        description={`Are you sure you want to delete "${loc.name}"? This will move it to the recycle bin where it can be restored later.`}
+                        confirmText="Delete Farm"
+                        variant="destructive"
+                        onConfirm={() => onDelete(loc)}
+                      >
+                        <Button variant="destructive" size="sm">
+                          <Trash2 className="mr-1" size={16} /> Delete
+                        </Button>
+                      </ConfirmDialog>
                     </TableCell>
                   </TableRow>
                 ))

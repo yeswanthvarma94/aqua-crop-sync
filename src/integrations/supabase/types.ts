@@ -176,6 +176,7 @@ export type Database = {
           account_id: string
           address: string | null
           created_at: string
+          deleted_at: string | null
           id: string
           name: string
           updated_at: string
@@ -184,6 +185,7 @@ export type Database = {
           account_id: string
           address?: string | null
           created_at?: string
+          deleted_at?: string | null
           id?: string
           name: string
           updated_at?: string
@@ -192,6 +194,7 @@ export type Database = {
           account_id?: string
           address?: string | null
           created_at?: string
+          deleted_at?: string | null
           id?: string
           name?: string
           updated_at?: string

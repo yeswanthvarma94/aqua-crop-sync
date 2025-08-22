@@ -1,6 +1,6 @@
 
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import { format } from "date-fns";
 import { useSelection } from "@/state/SelectionContext";
 import { cropDayFromStartIST, nowIST } from "@/lib/time";
 import { useToast } from "@/hooks/use-toast";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/state/AuthContext";
@@ -400,10 +401,6 @@ const Tanks = () => {
   };
 
   const onDeleteTank = async (t: Tank) => {
-    if (!window.confirm(`Are you sure you want to delete "${t.name}"? This will move it to the recycle bin.`)) {
-      return;
-    }
-    
     try {
       console.log("Deleting tank:", t.id, "Account ID:", accountId);
       // Soft delete - move to recycle bin
@@ -419,9 +416,12 @@ const Tanks = () => {
       }
       setRev((r) => r + 1);
       toast({ title: "Tank Deleted", description: `${t.name} has been moved to recycle bin` });
-    } catch (e) {
+    } catch (e: any) {
       console.error("Failed to delete tank:", e);
-      toast({ title: "Error", description: "Failed to delete tank. Please try again.", variant: "destructive" });
+      const errorMessage = e?.message?.includes('foreign key') 
+        ? 'Cannot delete tank with active data. End crop and clear logs first.'
+        : 'Failed to delete tank. Please try again.';
+      toast({ title: "Error", description: errorMessage, variant: "destructive" });
     }
   };
 
@@ -615,7 +615,17 @@ const Tanks = () => {
                             : d?.seedDate && !d?.cropEnd ? "End Crop" : "Start Crop"
                           }
                         </Button>
-                          <Button variant="destructive" size="sm" onClick={() => onDeleteTank(t)}>Delete</Button>
+                          <ConfirmDialog
+                            title="Delete Tank"
+                            description={`Are you sure you want to delete "${t.name}"? This will move it to the recycle bin where it can be restored later.`}
+                            confirmText="Delete Tank"
+                            variant="destructive"
+                            onConfirm={() => onDeleteTank(t)}
+                          >
+                            <Button variant="destructive" size="sm">
+                              Delete
+                            </Button>
+                          </ConfirmDialog>
                         </div>
                       </TableCell>
                     </TableRow>
