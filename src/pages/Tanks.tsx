@@ -103,13 +103,18 @@ const Tanks = () => {
 
   const loadTanks = async () => {
     if (!accountId || !locationId) return;
+    console.log("Loading tanks for account:", accountId, "location:", locationId);
+    
     const { data, error } = await supabase
       .from("tanks")
       .select("id, name, type, location_id, seed_weight, pl_size, total_seed, area, status")
       .eq("account_id", accountId)
       .eq("location_id", locationId)
+      .is("deleted_at", null) // Only load non-deleted tanks
       .order("created_at", { ascending: false });
-    if (!error) {
+      
+    if (!error && data) {
+      console.log("Loaded tanks:", data);
       const mapped = (data || []).map((t: any) => ({ 
         id: t.id, 
         name: t.name, 
@@ -124,6 +129,13 @@ const Tanks = () => {
       setTanksAll(mapped);
     } else {
       console.error("Error loading tanks:", error);
+      if (error) {
+        toast({ 
+          title: "Database Error", 
+          description: "Failed to load tanks. Please refresh the page.", 
+          variant: "destructive" 
+        });
+      }
     }
   };
 
@@ -195,22 +207,33 @@ const Tanks = () => {
   const onCreateTank = async () => {
     if (!locationId || !isValid || !accountId) return;
     
-    // Check tank limit
-    const plan = loadPlan();
-    const limitCheck = await checkTankLimit(accountId, locationId, plan);
-    
-    if (!limitCheck.canCreate) {
-      toast({
-        title: "Plan Limit Reached",
-        description: limitCheck.message,
-        variant: "destructive",
-      });
-      return;
+    // Check tank limit only for new tanks
+    if (!editingTank) {
+      const plan = loadPlan();
+      const limitCheck = await checkTankLimit(accountId, locationId, plan);
+      
+      if (!limitCheck.canCreate) {
+        toast({
+          title: "Plan Limit Reached",
+          description: limitCheck.message,
+          variant: "destructive",
+        });
+        return;
+      }
     }
 
     const name = formName.trim();
     try {
       if (editingTank) {
+        console.log("Updating tank:", editingTank.id, "with data:", {
+          name,
+          type: formType,
+          seed_weight: formSeedWeight ? parseFloat(formSeedWeight) : null,
+          pl_size: formPLSize ? parseFloat(formPLSize) : null,
+          total_seed: formTotalSeed ? parseFloat(formTotalSeed) : null,
+          area: formArea ? parseFloat(formArea) : null,
+        });
+        
         // Update existing tank with all details
         const tankData = {
           name,
@@ -219,14 +242,26 @@ const Tanks = () => {
           pl_size: formPLSize ? parseFloat(formPLSize) : null,
           total_seed: formTotalSeed ? parseFloat(formTotalSeed) : null,
           area: formArea ? parseFloat(formArea) : null,
+          updated_at: new Date().toISOString(),
         };
         
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from("tanks")
           .update(tankData)
           .eq("id", editingTank.id)
-          .eq("account_id", accountId);
-        if (error) throw error;
+          .eq("account_id", accountId)
+          .select();
+          
+        if (error) {
+          console.error("Tank update error:", error);
+          throw error;
+        }
+        
+        if (!data || data.length === 0) {
+          throw new Error("No tank was updated. Please check if the tank exists and you have permission.");
+        }
+        
+        console.log("Tank updated successfully:", data[0]);
         
         // Update crop data only if there's an existing active crop and seed date is provided
         if (formSeedDate) {
@@ -236,10 +271,13 @@ const Tanks = () => {
             pl_size: formPLSize ? parseFloat(formPLSize) : null,
             total_seed: formTotalSeed ? parseFloat(formTotalSeed) : null,
             area: formArea ? parseFloat(formArea) : null,
+            updated_at: new Date().toISOString(),
           };
           
+          console.log("Updating crop data:", cropData);
+          
           // Only update existing active crops, don't create new ones automatically
-          const { data: existingCrop } = await supabase
+          const { data: existingCrop, error: cropSelectError } = await supabase
             .from("tank_crops")
             .select("id")
             .eq("tank_id", editingTank.id)
@@ -247,11 +285,22 @@ const Tanks = () => {
             .is("end_date", null)
             .maybeSingle();
             
+          if (cropSelectError) {
+            console.error("Error checking existing crop:", cropSelectError);
+          }
+            
           if (existingCrop) {
-            await supabase
+            const { data: updatedCrop, error: cropUpdateError } = await supabase
               .from("tank_crops")
               .update(cropData)
-              .eq("id", existingCrop.id);
+              .eq("id", existingCrop.id)
+              .select();
+              
+            if (cropUpdateError) {
+              console.error("Error updating crop:", cropUpdateError);
+            } else {
+              console.log("Crop updated successfully:", updatedCrop);
+            }
           }
         }
       } else {
@@ -267,10 +316,23 @@ const Tanks = () => {
           pl_size: formPLSize ? parseFloat(formPLSize) : null,
           total_seed: formTotalSeed ? parseFloat(formTotalSeed) : null,
           area: formArea ? parseFloat(formArea) : null,
+          status: "idle",
+          created_at: new Date().toISOString(),
         };
         
-        const { error } = await supabase.from("tanks").insert([tankData]);
-        if (error) throw error;
+        console.log("Creating new tank:", tankData);
+        
+        const { data, error } = await supabase
+          .from("tanks")
+          .insert([tankData])
+          .select();
+          
+        if (error) {
+          console.error("Tank creation error:", error);
+          throw error;
+        }
+        
+        console.log("Tank created successfully:", data[0]);
         
         // Don't automatically start crop when creating tank - user should use "Start Crop" button
       }
@@ -290,9 +352,18 @@ const Tanks = () => {
         title: editingTank ? "Tank Updated" : "Tank Created", 
         description: `${name} has been ${editingTank ? "updated" : "added"} successfully` 
       });
+      
+      // Force reload tanks to reflect changes
+      await loadTanks();
       setRev((r) => r + 1);
-    } catch (e) {
-      toast({ title: "Error", description: `Failed to ${editingTank ? "update" : "create"} tank.`, variant: "destructive" });
+    } catch (e: any) {
+      console.error(`Failed to ${editingTank ? "update" : "create"} tank:`, e);
+      const errorMsg = e?.message || `Failed to ${editingTank ? "update" : "create"} tank.`;
+      toast({ 
+        title: "Error", 
+        description: errorMsg, 
+        variant: "destructive" 
+      });
     }
   };
 
