@@ -87,13 +87,18 @@ const Materials = () => {
   const [editingMaterial, setEditingMaterial] = useState<any>(null);
 
   const loadStocks = async (locationId: string) => {
+    if (!accountId) return;
+    console.log("Loading stocks for materials page. Location:", locationId, "Account:", accountId);
+    
     const { data, error } = await supabase
       .from("stocks")
-      .select("id, name, category, unit, quantity, price_per_unit, min_stock, expiry_date, notes, created_at, created_at")
+      .select("id, name, category, unit, quantity, price_per_unit, total_amount, min_stock, expiry_date, notes, created_at, updated_at")
       .eq("account_id", accountId)
       .eq("location_id", locationId)
       .order("created_at", { ascending: false });
-    if (!error) {
+      
+    if (!error && data) {
+      console.log("Loaded stocks for materials:", data.length, "items");
       const mapped: StockRecord[] = (data || []).map((s: any) => ({
         id: s.id,
         name: s.name,
@@ -106,15 +111,28 @@ const Materials = () => {
         expiryDate: s.expiry_date || undefined,
         notes: s.notes || undefined,
         createdAt: s.created_at,
-        updatedAt: s.created_at,
+        updatedAt: s.updated_at,
       }));
       setStocks(mapped);
+    } else {
+      console.error("Error loading stocks for materials:", error);
+      if (error) {
+        toast({ 
+          title: "Database Error", 
+          description: "Failed to load stocks. Please refresh the page.", 
+          variant: "destructive" 
+        });
+      }
     }
   };
 
   const loadLogs = async (locationId: string, tankId: string, dateKey: string) => {
+    if (!accountId) return;
+    console.log("Loading material logs. Location:", locationId, "Tank:", tankId, "Date:", dateKey, "Account:", accountId);
+    
     const start = new Date(`${dateKey}T00:00:00.000Z`);
     const end = new Date(`${dateKey}T23:59:59.999Z`);
+    
     const { data, error } = await supabase
       .from("material_logs")
       .select("id, stock_id, quantity, note, tank_id, location_id, logged_at, stocks(name, category, unit)")
@@ -124,7 +142,9 @@ const Materials = () => {
       .gte("logged_at", start.toISOString())
       .lte("logged_at", end.toISOString())
       .order("logged_at", { ascending: true });
-    if (!error) {
+      
+    if (!error && data) {
+      console.log("Loaded material logs:", data.length, "entries");
       const mapped: MaterialLogEntry[] = (data || []).map((e: any) => ({
         tankId: e.tank_id,
         stockId: e.stock_id,
@@ -137,6 +157,15 @@ const Materials = () => {
         createdAt: e.logged_at,
       }));
       setEntries(mapped);
+    } else {
+      console.error("Error loading material logs:", error);
+      if (error) {
+        toast({ 
+          title: "Database Error", 
+          description: "Failed to load material logs. Please refresh the page.", 
+          variant: "destructive" 
+        });
+      }
     }
   };
 
@@ -175,13 +204,22 @@ const Materials = () => {
     }
 
     try {
+      console.log("Saving material usage:", {
+        stock: selectedStock.name,
+        quantity,
+        location: location.id,
+        tank: tank.id,
+        account: accountId
+      });
+      
       // Compute logged_at from selected date (todayKey) and time
       const loggedAt = new Date(`${todayKey}T${timeStr}:00.000Z`);
 
       // 1) Insert material log with weighted average price
       const weightedAvgPrice = selectedStock.pricePerUnit || 0;
-      const { error: logError } = await supabase.from("material_logs").insert([
-        {
+      const { data: logData, error: logError } = await supabase
+        .from("material_logs")
+        .insert([{
           account_id: accountId,
           location_id: location.id,
           tank_id: tank.id,
@@ -190,31 +228,55 @@ const Materials = () => {
           price_per_unit: weightedAvgPrice, // Store weighted average price at time of usage
           note: notes || null,
           logged_at: loggedAt.toISOString(),
-        },
-      ]);
-      if (logError) throw logError;
+        }])
+        .select();
+        
+      if (logError) {
+        console.error("Material log creation error:", logError);
+        throw logError;
+      }
+      
+      console.log("Material log created successfully:", logData?.[0]);
 
       // 2) Fetch latest stock quantity and subtract used quantity
       const { data: stockRow, error: stockFetchError } = await supabase
         .from("stocks")
         .select("quantity")
         .eq("id", selectedStock.id)
+        .eq("account_id", accountId)
         .maybeSingle();
-      if (stockFetchError) throw stockFetchError;
+        
+      if (stockFetchError) {
+        console.error("Error fetching stock for update:", stockFetchError);
+        throw stockFetchError;
+      }
+      
       const currentQty = Number(stockRow?.quantity ?? 0);
       const newQty = Math.max(0, currentQty - Number(quantity));
-      const { error: stockUpdateError } = await supabase
+      
+      console.log("Updating stock quantity from", currentQty, "to", newQty);
+      
+      const { data: stockUpdateData, error: stockUpdateError } = await supabase
         .from("stocks")
-        .update({ quantity: newQty })
-        .eq("id", selectedStock.id);
-      if (stockUpdateError) throw stockUpdateError;
+        .update({ quantity: newQty, updated_at: new Date().toISOString() })
+        .eq("id", selectedStock.id)
+        .eq("account_id", accountId)
+        .select();
+        
+      if (stockUpdateError) {
+        console.error("Stock update error:", stockUpdateError);
+        throw stockUpdateError;
+      }
+      
+      console.log("Stock updated successfully:", stockUpdateData?.[0]);
 
       // 3) Create expense for material usage
       const materialAmount = quantity * weightedAvgPrice;
       const incurredDate = loggedAt.toISOString().slice(0, 10);
-      const { error: expenseError } = await supabase
+      
+      const { data: expenseData, error: expenseError } = await supabase
         .from("expenses")
-        .insert({
+        .insert([{
           account_id: accountId,
           location_id: location.id,
           tank_id: tank.id,
@@ -224,17 +286,39 @@ const Materials = () => {
           amount: materialAmount,
           incurred_at: incurredDate,
           notes: notes || null,
-        });
-      if (expenseError) throw expenseError;
+        }])
+        .select();
+        
+      if (expenseError) {
+        console.error("Expense creation error:", expenseError);
+        throw expenseError;
+      }
+      
+      console.log("Expense created successfully:", expenseData?.[0]);
 
-      // Reset inputs and refresh
+      // Reset inputs and refresh data
       setQuantity(0);
       setNotes("");
+      setSelectedStockId("");
       setEditingMaterial(null);
-      toast({ title: "Saved", description: `${selectedStock.name} — ${quantity} ${selectedStock.unit} (₹${materialAmount.toFixed(2)})` });
+      
+      // Force reload data to reflect changes
+      await loadStocks(location.id);
+      await loadLogs(location.id, tank.id, todayKey);
+      
       setRev((r) => r + 1);
-    } catch (e) {
-      toast({ title: "Error", description: "Failed to save. Please try again.", variant: "destructive" });
+      toast({ 
+        title: "Saved", 
+        description: `${selectedStock.name} — ${quantity} ${selectedStock.unit} (₹${materialAmount.toFixed(2)})` 
+      });
+    } catch (e: any) {
+      console.error("Failed to save material usage:", e);
+      const errorMsg = e?.message || "Failed to save material usage. Please try again.";
+      toast({ 
+        title: "Error", 
+        description: errorMsg, 
+        variant: "destructive" 
+      });
     }
   };
 

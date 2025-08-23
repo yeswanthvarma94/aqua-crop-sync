@@ -244,18 +244,38 @@ const TankFeeding = () => {
 
   const onDeleteFeeding = async (feedingId: string) => {
     try {
-      const { error } = await supabase
+      console.log("Deleting feeding entry:", feedingId, "Account:", accountId);
+      
+      const { data, error } = await supabase
         .from("feeding_logs")
         .delete()
-        .eq("id", feedingId);
+        .eq("id", feedingId)
+        .eq("account_id", accountId)
+        .select();
 
-      if (error) throw error;
-
+      if (error) {
+        console.error("Delete feeding entry error:", error);
+        throw error;
+      }
+      
+      if (!data || data.length === 0) {
+        throw new Error("No feeding entry was deleted. Entry may not exist or you may not have permission.");
+      }
+      
+      console.log("Feeding entry deleted successfully");
+      
+      // Force reload data to reflect changes
+      await loadStocksFromDB(accountId!, locationId!).then(setStocks);
       setRev(r => r + 1);
       toast({ title: "Deleted", description: "Feeding entry removed successfully" });
-    } catch (error) {
-      console.error("Error deleting feeding entry:", error);
-      toast({ title: "Error", description: "Failed to delete feeding entry" });
+    } catch (error: any) {
+      console.error("Failed to delete feeding entry:", error);
+      const errorMsg = error?.message || "Failed to delete feeding entry. Please try again.";
+      toast({ 
+        title: "Error", 
+        description: errorMsg, 
+        variant: "destructive" 
+      });
     }
   };
 

@@ -104,6 +104,8 @@ const RecycleBin = () => {
 
   const loadDeletedTanks = async () => {
     if (!accountId) return;
+    console.log("Loading deleted tanks for account:", accountId);
+    
     const { data, error } = await supabase
       .from("tanks")
       .select("id, name, type, location_id, seed_weight, pl_size, total_seed, area, status, deleted_at")
@@ -111,7 +113,8 @@ const RecycleBin = () => {
       .not("deleted_at", "is", null)
       .order("deleted_at", { ascending: false });
     
-    if (!error) {
+    if (!error && data) {
+      console.log("Loaded deleted tanks:", data);
       const mapped = (data || []).map((t: any) => ({ 
         id: t.id, 
         name: t.name, 
@@ -127,6 +130,13 @@ const RecycleBin = () => {
       setDeletedTanks(mapped);
     } else {
       console.error("Error loading deleted tanks:", error);
+      if (error) {
+        toast({ 
+          title: "Database Error", 
+          description: "Failed to load deleted tanks. Please refresh the page.", 
+          variant: "destructive" 
+        });
+      }
     }
   };
 
@@ -136,41 +146,85 @@ const RecycleBin = () => {
 
   const onRestoreTank = async (tank: DeletedTank) => {
     try {
-      const { error } = await supabase
-        .from("tanks")
-        .update({ deleted_at: null })
-        .eq("id", tank.id)
-        .eq("account_id", accountId);
+      console.log("Restoring tank:", tank.id, "Account ID:", accountId);
       
-      if (error) throw error;
+      const { data, error } = await supabase
+        .from("tanks")
+        .update({ deleted_at: null, updated_at: new Date().toISOString() })
+        .eq("id", tank.id)
+        .eq("account_id", accountId)
+        .select();
+      
+      if (error) {
+        console.error("Restore tank error:", error);
+        throw error;
+      }
+      
+      if (!data || data.length === 0) {
+        throw new Error("No tank was restored. Tank may not exist or you may not have permission.");
+      }
+      
+      console.log("Tank restored successfully:", data[0]);
+      
+      // Force reload deleted tanks
+      await loadDeletedTanks();
       setRev((r) => r + 1);
       toast({ title: "Restored", description: `${tank.name} has been restored successfully` });
-    } catch (e) {
-      toast({ title: "Error", description: "Failed to restore tank.", variant: "destructive" });
+    } catch (e: any) {
+      console.error("Failed to restore tank:", e);
+      const errorMsg = e?.message || "Failed to restore tank. Please try again.";
+      toast({ title: "Error", description: errorMsg, variant: "destructive" });
     }
   };
 
   const onPermanentDelete = async (tank: DeletedTank) => {
     try {
+      console.log("Permanently deleting tank:", tank.id, "Account ID:", accountId);
+      
       // Hard delete the tank and all associated data
-      await Promise.all([
+      const deletePromises = [
         supabase.from("tank_crops").delete().eq("tank_id", tank.id).eq("account_id", accountId),
         supabase.from("feeding_logs").delete().eq("tank_id", tank.id).eq("account_id", accountId),
         supabase.from("material_logs").delete().eq("tank_id", tank.id).eq("account_id", accountId),
         supabase.from("expenses").delete().eq("tank_id", tank.id).eq("account_id", accountId),
-      ]);
+      ];
+      
+      const results = await Promise.allSettled(deletePromises);
+      
+      // Log any errors from associated data deletion
+      results.forEach((result, index) => {
+        const tables = ["tank_crops", "feeding_logs", "material_logs", "expenses"];
+        if (result.status === "rejected") {
+          console.warn(`Failed to delete ${tables[index]} for tank ${tank.id}:`, result.reason);
+        }
+      });
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("tanks")
         .delete()
         .eq("id", tank.id)
-        .eq("account_id", accountId);
+        .eq("account_id", accountId)
+        .select();
       
-      if (error) throw error;
+      if (error) {
+        console.error("Permanent delete tank error:", error);
+        throw error;
+      }
+      
+      if (!data || data.length === 0) {
+        throw new Error("No tank was deleted. Tank may not exist or you may not have permission.");
+      }
+      
+      console.log("Tank permanently deleted successfully");
+      
+      // Force reload deleted tanks
+      await loadDeletedTanks();
       setRev((r) => r + 1);
       toast({ title: "Permanently Deleted", description: `${tank.name} has been permanently deleted` });
-    } catch (e) {
-      toast({ title: "Error", description: "Failed to permanently delete tank.", variant: "destructive" });
+    } catch (e: any) {
+      console.error("Failed to permanently delete tank:", e);
+      const errorMsg = e?.message || "Failed to permanently delete tank. Please try again.";
+      toast({ title: "Error", description: errorMsg, variant: "destructive" });
     }
   };
 

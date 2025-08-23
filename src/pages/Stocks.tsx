@@ -83,13 +83,17 @@ const Stocks = () => {
 
   const load = async () => {
     if (!locationId || !accountId) return;
+    console.log("Loading stocks for location:", locationId, "account:", accountId);
+    
     const { data, error } = await supabase
       .from("stocks")
-      .select("id, name, category, unit, quantity, price_per_unit, min_stock, expiry_date, notes, created_at, created_at")
+      .select("id, name, category, unit, quantity, price_per_unit, total_amount, min_stock, expiry_date, notes, created_at, updated_at")
       .eq("account_id", accountId)
       .eq("location_id", locationId)
       .order("created_at", { ascending: false });
-    if (!error) {
+      
+    if (!error && data) {
+      console.log("Loaded stocks:", data);
       const mapped: StockRecord[] = (data || []).map((s: any) => ({
         id: s.id,
         name: s.name,
@@ -102,9 +106,18 @@ const Stocks = () => {
         expiryDate: s.expiry_date || undefined,
         notes: s.notes || undefined,
         createdAt: s.created_at,
-        updatedAt: s.created_at,
+        updatedAt: s.updated_at,
       }));
       setStocks(mapped);
+    } else {
+      console.error("Error loading stocks:", error);
+      if (error) {
+        toast({ 
+          title: "Database Error", 
+          description: "Failed to load stocks. Please refresh the page.", 
+          variant: "destructive" 
+        });
+      }
     }
   };
 
@@ -167,8 +180,17 @@ const Stocks = () => {
       const amountDelta = Number(quantity) * Number(pricePerUnit);
 
       if (editingStock) {
+        console.log("Updating stock:", editingStock.id, "with data:", {
+          name,
+          category,
+          unit,
+          quantity,
+          price_per_unit: pricePerUnit,
+          total_amount: amountDelta,
+        });
+        
         // Update existing stock
-        const { error: updErr } = await supabase
+        const { data, error: updErr } = await supabase
           .from("stocks")
           .update({
             name,
@@ -180,9 +202,22 @@ const Stocks = () => {
             expiry_date: expiryDateStr,
             notes: notes || null,
             total_amount: amountDelta,
+            updated_at: new Date().toISOString(),
           })
-          .eq("id", editingStock.id);
-        if (updErr) throw updErr;
+          .eq("id", editingStock.id)
+          .eq("account_id", accountId)
+          .select();
+          
+        if (updErr) {
+          console.error("Stock update error:", updErr);
+          throw updErr;
+        }
+        
+        if (!data || data.length === 0) {
+          throw new Error("No stock was updated. Please check if the stock exists and you have permission.");
+        }
+        
+        console.log("Stock updated successfully:", data[0]);
       } else {
         // Check for existing stock to add to
         const { data: existing, error: fetchErr } = await supabase
@@ -193,9 +228,14 @@ const Stocks = () => {
           .eq("name", name)
           .eq("unit", unit)
           .maybeSingle();
-        if (fetchErr) throw fetchErr;
+          
+        if (fetchErr) {
+          console.error("Error checking existing stock:", fetchErr);
+          throw fetchErr;
+        }
 
         if (existing) {
+          console.log("Found existing stock, updating:", existing);
           const existingQty = Number(existing.quantity || 0);
           const existingTotal = Number(existing.total_amount || 0);
           const newQty = existingQty + Number(quantity);
@@ -205,7 +245,7 @@ const Stocks = () => {
           const existingAvgPrice = existingQty > 0 ? existingTotal / existingQty : 0;
           const weightedAvgPrice = newQty > 0 ? ((existingQty * existingAvgPrice) + (Number(quantity) * Number(pricePerUnit))) / newQty : 0;
           
-          const { error: updErr } = await supabase
+          const { data, error: updErr } = await supabase
             .from("stocks")
             .update({
               quantity: newQty,
@@ -215,12 +255,23 @@ const Stocks = () => {
               notes: notes || null,
               total_amount: newTotal,
               category,
+              updated_at: new Date().toISOString(),
             })
-            .eq("id", existing.id);
-          if (updErr) throw updErr;
+            .eq("id", existing.id)
+            .select();
+            
+          if (updErr) {
+            console.error("Error updating existing stock:", updErr);
+            throw updErr;
+          }
+          
+          console.log("Existing stock updated successfully:", data?.[0]);
         } else {
-          const { error: insErr } = await supabase.from("stocks").insert([
-            {
+          console.log("Creating new stock:", { name, category, unit, quantity });
+          
+          const { data, error: insErr } = await supabase
+            .from("stocks")
+            .insert([{
               account_id: accountId,
               location_id: locationId,
               name,
@@ -232,20 +283,34 @@ const Stocks = () => {
               expiry_date: expiryDateStr,
               notes: notes || null,
               total_amount: amountDelta,
-            },
-          ]);
-          if (insErr) throw insErr;
+            }])
+            .select();
+            
+          if (insErr) {
+            console.error("Stock creation error:", insErr);
+            throw insErr;
+          }
+          
+          console.log("New stock created successfully:", data?.[0]);
         }
       }
 
+      // Force reload stocks to reflect changes
+      await load();
       setRev((r) => r + 1);
       handleOpen(false);
       toast({ 
         title: editingStock ? "Updated" : "Saved", 
         description: `${name} — ${quantity} ${unit}` 
       });
-    } catch (e) {
-      toast({ title: "Error", description: "Failed to save. Please try again.", variant: "destructive" });
+    } catch (e: any) {
+      console.error(`Failed to ${editingStock ? "update" : "save"} stock:`, e);
+      const errorMsg = e?.message || `Failed to ${editingStock ? "update" : "save"} stock. Please try again.`;
+      toast({ 
+        title: "Error", 
+        description: errorMsg, 
+        variant: "destructive" 
+      });
     }
   };
 

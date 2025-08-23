@@ -458,9 +458,19 @@ const Expenses = () => {
     try {
       const name = category === "other" ? (customName.trim() || "Other") : categoryLabel[category];
       
+      console.log("Saving expense:", {
+        category,
+        name,
+        amount,
+        date: dateStr,
+        location: location.id,
+        tank: tank.id,
+        account: accountId
+      });
+      
       if (editingExpense) {
         // Update existing expense
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('expenses')
           .update({
             category,
@@ -469,39 +479,71 @@ const Expenses = () => {
             amount,
             incurred_at: dateStr,
             notes: notes || null,
+            updated_at: new Date().toISOString(),
           })
-          .eq('id', editingExpense.id);
+          .eq('id', editingExpense.id)
+          .eq('account_id', accountId)
+          .select();
         
-        if (error) throw error;
+        if (error) {
+          console.error("Expense update error:", error);
+          throw error;
+        }
+        
+        if (!data || data.length === 0) {
+          throw new Error("No expense was updated. Expense may not exist or you may not have permission.");
+        }
+        
+        console.log("Expense updated successfully:", data[0]);
       } else {
         // Create new expense
-        await saveExpense(accountId, location.id, tank.id, {
-          category,
-          name,
-          amount,
-          date: dateStr,
-          time: timeStr,
-          notes: notes || undefined,
-        });
+        const { data, error } = await supabase
+          .from('expenses')
+          .insert([{
+            account_id: accountId,
+            location_id: location.id,
+            tank_id: tank.id,
+            category,
+            name,
+            description: name,
+            amount,
+            incurred_at: dateStr,
+            notes: notes || null,
+          }])
+          .select();
+          
+        if (error) {
+          console.error("Expense creation error:", error);
+          throw error;
+        }
+        
+        console.log("Expense created successfully:", data?.[0]);
       }
 
-      // Reload expenses
+      // Reload expenses to reflect changes
       const updatedExpenses = await loadExpenses(accountId, location.id, tank.id);
       setEntries(updatedExpenses);
 
+      // Reset form
       setAmount(0);
       setNotes("");
       setCustomName("");
       setCategory("manpower");
       setDateStr(todayKey);
       setEditingExpense(null);
+      
       toast({ 
         title: editingExpense ? "Updated" : "Saved", 
-        description: `${name} — ₹ ${amount.toFixed(2)}` 
+        description: `${name} — ₹${amount.toFixed(2)}` 
       });
-    } catch (error) {
-      console.error('Error saving expense:', error);
-      toast({ title: "Error", description: "Failed to save expense" });
+    } catch (error: any) {
+      console.error(`Failed to ${editingExpense ? "update" : "create"} expense:`, error);
+      const errorMsg = error?.message || `Failed to ${editingExpense ? "update" : "save"} expense. Please try again.`;
+      toast({ 
+        title: "Error", 
+        description: errorMsg, 
+        variant: "destructive" 
+      });
     }
   };
 

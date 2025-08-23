@@ -61,13 +61,28 @@ const Locations = () => {
 
   const load = async () => {
     if (!accountId) return;
+    console.log("Loading locations for account:", accountId);
+    
     const { data, error } = await supabase
       .from("locations")
       .select("id, name, address, account_id")
       .eq("account_id", accountId)
       .is("deleted_at", null) // Only load non-deleted locations
       .order("created_at", { ascending: false });
-    if (!error) setLocations(data as any);
+      
+    if (!error && data) {
+      console.log("Loaded locations:", data);
+      setLocations(data as any);
+    } else {
+      console.error("Error loading locations:", error);
+      if (error) {
+        toast({ 
+          title: "Database Error", 
+          description: "Failed to load locations. Please refresh the page.", 
+          variant: "destructive" 
+        });
+      }
+    }
   };
 
 
@@ -81,16 +96,33 @@ const Locations = () => {
 
     try {
       if (editing) {
-        const { error } = await supabase
+        console.log("Updating location:", editing.id, "with data:", {
+          name: form.name.trim(),
+          address: form.address?.trim() || null,
+        });
+        
+        const { data, error } = await supabase
           .from("locations")
           .update({
             name: form.name.trim(),
             address: form.address?.trim() || null,
+            updated_at: new Date().toISOString(),
           })
           .eq("id", editing.id)
-          .eq("account_id", accountId);
-        if (error) throw error;
-        toast({ title: "Updated" });
+          .eq("account_id", accountId)
+          .select();
+          
+        if (error) {
+          console.error("Location update error:", error);
+          throw error;
+        }
+        
+        if (!data || data.length === 0) {
+          throw new Error("No location was updated. Please check if the location exists and you have permission.");
+        }
+        
+        console.log("Location updated successfully:", data[0]);
+        toast({ title: "Updated", description: `${form.name} has been updated successfully.` });
       } else {
         // Check location limit for new location
         const plan = loadPlan();
@@ -111,17 +143,33 @@ const Locations = () => {
           address: form.address?.trim() || null,
           account_id: accountId,
         };
-        const { error } = await supabase.from("locations").insert([newLoc]);
-        if (error) throw error;
-        toast({ title: "Created" });
+        
+        console.log("Creating new location:", newLoc);
+        
+        const { data, error } = await supabase
+          .from("locations")
+          .insert([newLoc])
+          .select();
+          
+        if (error) {
+          console.error("Location creation error:", error);
+          throw error;
+        }
+        
+        console.log("Location created successfully:", data[0]);
+        toast({ title: "Created", description: `${form.name} has been created successfully.` });
       }
       setOpen(false);
       resetForm();
+      
+      // Force reload locations to reflect changes
       await load();
-    } catch (error) {
+    } catch (error: any) {
+      console.error(`Failed to ${editing ? "update" : "create"} location:`, error);
+      const errorMsg = error?.message || `Failed to ${editing ? "update" : "create"} location. Please try again.`;
       toast({
         title: "Error",
-        description: "Failed to save. Please try again.",
+        description: errorMsg,
         variant: "destructive",
       });
     }
