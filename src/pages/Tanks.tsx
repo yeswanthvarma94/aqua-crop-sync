@@ -228,17 +228,17 @@ const Tanks = () => {
           .eq("account_id", accountId);
         if (error) throw error;
         
-        // Update crop data if seed date is provided
+        // Update crop data only if there's an existing active crop and seed date is provided
         if (formSeedDate) {
           const cropData = {
-            seed_date: formSeedDate.toISOString().slice(0, 10),
+            seed_date: format(formSeedDate, "yyyy-MM-dd"),
             seed_weight: formSeedWeight ? parseFloat(formSeedWeight) : null,
             pl_size: formPLSize ? parseFloat(formPLSize) : null,
             total_seed: formTotalSeed ? parseFloat(formTotalSeed) : null,
             area: formArea ? parseFloat(formArea) : null,
           };
           
-          // Check if there's an active crop to update
+          // Only update existing active crops, don't create new ones automatically
           const { data: existingCrop } = await supabase
             .from("tank_crops")
             .select("id")
@@ -252,15 +252,6 @@ const Tanks = () => {
               .from("tank_crops")
               .update(cropData)
               .eq("id", existingCrop.id);
-          } else {
-            await supabase.from("tank_crops").insert([
-              { 
-                account_id: accountId, 
-                tank_id: editingTank.id, 
-                end_date: null,
-                ...cropData
-              },
-            ]);
           }
         }
       } else {
@@ -281,21 +272,7 @@ const Tanks = () => {
         const { error } = await supabase.from("tanks").insert([tankData]);
         if (error) throw error;
         
-        // If seed date is provided, also create a crop entry with details
-        if (formSeedDate) {
-          const cropData = {
-            account_id: accountId, 
-            tank_id: id, 
-            seed_date: formSeedDate.toISOString().slice(0, 10), 
-            end_date: null,
-            seed_weight: formSeedWeight ? parseFloat(formSeedWeight) : null,
-            pl_size: formPLSize ? parseFloat(formPLSize) : null,
-            total_seed: formTotalSeed ? parseFloat(formTotalSeed) : null,
-            area: formArea ? parseFloat(formArea) : null,
-          };
-          
-          await supabase.from("tank_crops").insert([cropData]);
-        }
+        // Don't automatically start crop when creating tank - user should use "Start Crop" button
       }
       
       setOpen(false);

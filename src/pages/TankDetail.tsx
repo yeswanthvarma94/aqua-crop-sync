@@ -175,7 +175,13 @@ const TankDetailPage = () => {
     if (existing) {
       setName(existing.name);
       setType(existing.type);
-      setSeedDate(existing.seedDate ? new Date(existing.seedDate) : undefined);
+      // Parse seed date as local date to avoid timezone issues
+      if (existing.seedDate) {
+        const [year, month, day] = existing.seedDate.split('T')[0].split('-');
+        setSeedDate(new Date(parseInt(year), parseInt(month) - 1, parseInt(day)));
+      } else {
+        setSeedDate(undefined);
+      }
       setSeedWeight(existing.seedWeight);
       setPlSize(existing.plSize);
       setTotalSeed(existing.totalSeed);
@@ -218,17 +224,21 @@ const TankDetailPage = () => {
       localStorage.setItem("tanks", JSON.stringify(updated));
     }
 
+    // Format seed date properly to avoid timezone issues
+    const seedDateString = seedDate ? format(seedDate, "yyyy-MM-dd") : undefined;
+
     const detail: TankDetail = {
       tankId,
       name,
       type,
-      seedDate: seedDate ? seedDate.toISOString() : undefined,
+      seedDate: seedDateString,
       seedWeight: type === "fish" ? seedWeight : undefined,
       plSize: type === "shrimp" ? plSize : undefined,
       totalSeed,
       areaAcres,
       price,
-      cropStart: seedDate ? seedDate.toISOString() : undefined,
+      // Only set cropStart if there's an existing active crop
+      cropStart: hasActiveCrop && seedDateString ? seedDateString : undefined,
       cropEnd: cropEnd ? cropEnd.toISOString() : undefined,
     };
 
