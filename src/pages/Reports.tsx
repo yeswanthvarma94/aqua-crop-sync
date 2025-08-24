@@ -271,11 +271,11 @@ const Reports = () => {
   const exportCSV = () => {
     if (!location || !tank) return;
 
-    // Group data by date
+    // Group data by date with enhanced structure matching the reference format
     const dataByDate = new Map<string, {
       date: string;
       scheduleFeeds: Map<string, number>;
-      materials: Array<{ name: string; quantity: number; unit: string }>;
+      materials: Array<{ name: string; quantity: number; unit: string; costPerUnit: number }>;
       expenses: Array<{ name: string; amount: number }>;
     }>();
 
@@ -283,31 +283,38 @@ const Reports = () => {
     for (const day of days) {
       dataByDate.set(day, {
         date: day,
-        scheduleFeeds: new Map(),
+        scheduleFeeds: new Map([
+          ["Schedule 1", 0],
+          ["Schedule 2", 0], 
+          ["Schedule 3", 0],
+          ["Schedule 4", 0]
+        ]),
         materials: [],
         expenses: []
       });
     }
 
-    // Process feeding data by schedule
+    // Process feeding data by schedule (supports 4 schedules now)
     feedEntries.forEach(entry => {
       const day = entry.createdAt.slice(0, 10);
       const dayData = dataByDate.get(day);
-      if (dayData && entry.unit === "kg") {
+      if (dayData) {
         const current = dayData.scheduleFeeds.get(entry.schedule) || 0;
         dayData.scheduleFeeds.set(entry.schedule, current + entry.quantity);
       }
     });
 
-    // Process materials data
+    // Process materials data with cost per unit
     materialEntries.forEach(entry => {
       const day = entry.createdAt.slice(0, 10);
       const dayData = dataByDate.get(day);
       if (dayData) {
+        const costPerUnit = priceByStockId.get(entry.stockId) || 0;
         dayData.materials.push({
           name: entry.stockName,
           quantity: entry.quantity,
-          unit: entry.unit
+          unit: entry.unit,
+          costPerUnit: costPerUnit
         });
       }
     });
@@ -323,22 +330,26 @@ const Reports = () => {
       }
     });
 
-    // Generate CSV content
+    // Generate CSV content matching the reference format exactly
     const headers = [
       "Date",
       "Schedule 1",
       "Schedule 2", 
       "Schedule 3",
-      "Materials",
-      "Material Quantity Used",
-      "Expenses Name",
-      "Quantity Consumed Till Date",
-      "Total Amount"
+      "Schedule 4",
+      "Materials used",
+      "Material quantity",
+      "Expenses Name", 
+      "Quantity consumed till date",
+      "Total",
+      "Cost per unit",
+      "Amount"
     ];
 
     let csvContent = headers.join(",") + "\n";
     let totalFeedConsumed = 0;
     let totalExpenseAmount = 0;
+    let totalMaterialCost = 0;
 
     const sortedDates = Array.from(dataByDate.keys()).sort();
     
@@ -348,28 +359,49 @@ const Reports = () => {
       const schedule1 = dayData.scheduleFeeds.get("Schedule 1") || 0;
       const schedule2 = dayData.scheduleFeeds.get("Schedule 2") || 0;
       const schedule3 = dayData.scheduleFeeds.get("Schedule 3") || 0;
+      const schedule4 = dayData.scheduleFeeds.get("Schedule 4") || 0;
       
-      totalFeedConsumed += schedule1 + schedule2 + schedule3;
+      const dailyFeedTotal = schedule1 + schedule2 + schedule3 + schedule4;
+      totalFeedConsumed += dailyFeedTotal;
       
-      const materials = dayData.materials.map(m => `${m.name} (${m.quantity} ${m.unit})`).join("; ");
-      const materialQty = dayData.materials.map(m => `${m.quantity} ${m.unit}`).join("; ");
-      const expenses = dayData.expenses.map(e => e.name).join("; ");
-      const expenseAmounts = dayData.expenses.reduce((sum, e) => sum + e.amount, 0);
-      totalExpenseAmount += expenseAmounts;
+      // Process materials for this day
+      const materialsUsed = dayData.materials.map(m => m.name).join("; ");
+      const materialQuantity = dayData.materials.map(m => `${m.quantity}`).join("; ");
+      
+      // Calculate material costs
+      const dailyMaterialCost = dayData.materials.reduce((sum, m) => sum + (m.quantity * m.costPerUnit), 0);
+      totalMaterialCost += dailyMaterialCost;
+      
+      // Process expenses
+      const expensesNames = dayData.expenses.map(e => e.name).join("; ");
+      const dailyExpenseAmount = dayData.expenses.reduce((sum, e) => sum + e.amount, 0);
+      totalExpenseAmount += dailyExpenseAmount;
+      
+      // Calculate cost per unit (total cost / total feed consumed)
+      const costPerUnit = totalFeedConsumed > 0 ? (totalMaterialCost + totalExpenseAmount) / totalFeedConsumed : 0;
+      
+      // Total amount for the day
+      const totalAmount = dailyMaterialCost + dailyExpenseAmount;
 
-      const row = [
-        date,
-        schedule1.toFixed(2),
-        schedule2.toFixed(2),
-        schedule3.toFixed(2),
-        materials || "",
-        materialQty || "",
-        expenses || "",
-        totalFeedConsumed.toFixed(2),
-        `₹${totalExpenseAmount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`
-      ];
+      // Handle multiple rows if there are multiple materials/expenses on same day
+      if (dayData.materials.length > 0 || dayData.expenses.length > 0 || dailyFeedTotal > 0) {
+        const row = [
+          format(new Date(date), "dd-MM-yyyy"),
+          schedule1 > 0 ? schedule1.toString() : "",
+          schedule2 > 0 ? schedule2.toString() : "",
+          schedule3 > 0 ? schedule3.toString() : "",
+          schedule4 > 0 ? schedule4.toString() : "",
+          materialsUsed || "",
+          materialQuantity || "",
+          expensesNames || "",
+          totalFeedConsumed.toString(),
+          dailyFeedTotal.toString(),
+          costPerUnit > 0 ? costPerUnit.toFixed(2) : "",
+          totalAmount > 0 ? totalAmount.toString() : ""
+        ];
 
-      csvContent += row.map(cell => `"${cell}"`).join(",") + "\n";
+        csvContent += row.map(cell => `"${cell}"`).join(",") + "\n";
+      }
     });
 
     // Create and download file
