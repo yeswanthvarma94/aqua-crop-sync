@@ -271,66 +271,32 @@ const Reports = () => {
   const exportCSV = () => {
     if (!location || !tank) return;
 
-    // Group data by date with enhanced structure matching the reference format
-    const dataByDate = new Map<string, {
-      date: string;
-      scheduleFeeds: Map<string, number>;
-      materials: Array<{ name: string; quantity: number; unit: string; costPerUnit: number }>;
-      expenses: Array<{ name: string; amount: number }>;
+    // Group feeding data by feed type and calculate totals across all schedules
+    const feedingByType = new Map<string, { 
+      schedule1: number; 
+      schedule2: number; 
+      schedule3: number; 
+      schedule4: number; 
+      costPerUnit: number; 
     }>();
 
-    // Initialize with date range
-    for (const day of days) {
-      dataByDate.set(day, {
-        date: day,
-        scheduleFeeds: new Map([
-          ["Schedule 1", 0],
-          ["Schedule 2", 0], 
-          ["Schedule 3", 0],
-          ["Schedule 4", 0]
-        ]),
-        materials: [],
-        expenses: []
-      });
-    }
-
-    // Process feeding data by schedule (supports 4 schedules now)
     feedEntries.forEach(entry => {
-      const day = entry.createdAt.slice(0, 10);
-      const dayData = dataByDate.get(day);
-      if (dayData) {
-        const current = dayData.scheduleFeeds.get(entry.schedule) || 0;
-        dayData.scheduleFeeds.set(entry.schedule, current + entry.quantity);
+      const existing = feedingByType.get(entry.stockName) || { 
+        schedule1: 0, schedule2: 0, schedule3: 0, schedule4: 0, 
+        costPerUnit: priceByStockName.get(entry.stockName) || 0 
+      };
+      
+      switch(entry.schedule) {
+        case "Schedule 1": existing.schedule1 += entry.quantity; break;
+        case "Schedule 2": existing.schedule2 += entry.quantity; break;
+        case "Schedule 3": existing.schedule3 += entry.quantity; break;
+        case "Schedule 4": existing.schedule4 += entry.quantity; break;
       }
+      
+      feedingByType.set(entry.stockName, existing);
     });
 
-    // Process materials data with cost per unit
-    materialEntries.forEach(entry => {
-      const day = entry.createdAt.slice(0, 10);
-      const dayData = dataByDate.get(day);
-      if (dayData) {
-        const costPerUnit = priceByStockId.get(entry.stockId) || 0;
-        dayData.materials.push({
-          name: entry.stockName,
-          quantity: entry.quantity,
-          unit: entry.unit,
-          costPerUnit: costPerUnit
-        });
-      }
-    });
-
-    // Process expenses data
-    expenseEntries.forEach(entry => {
-      const dayData = dataByDate.get(entry.date);
-      if (dayData) {
-        dayData.expenses.push({
-          name: entry.name,
-          amount: entry.amount
-        });
-      }
-    });
-
-    // Generate CSV content matching the reference format exactly
+    // CSV Headers matching reference format
     const headers = [
       "Date",
       "Schedule 1",
@@ -347,61 +313,67 @@ const Reports = () => {
     ];
 
     let csvContent = headers.join(",") + "\n";
-    let totalFeedConsumed = 0;
-    let totalExpenseAmount = 0;
-    let totalMaterialCost = 0;
+    const rows: string[][] = [];
 
-    const sortedDates = Array.from(dataByDate.keys()).sort();
-    
-    sortedDates.forEach(date => {
-      const dayData = dataByDate.get(date)!;
-      
-      const schedule1 = dayData.scheduleFeeds.get("Schedule 1") || 0;
-      const schedule2 = dayData.scheduleFeeds.get("Schedule 2") || 0;
-      const schedule3 = dayData.scheduleFeeds.get("Schedule 3") || 0;
-      const schedule4 = dayData.scheduleFeeds.get("Schedule 4") || 0;
-      
-      const dailyFeedTotal = schedule1 + schedule2 + schedule3 + schedule4;
-      totalFeedConsumed += dailyFeedTotal;
-      
-      // Process materials for this day
-      const materialsUsed = dayData.materials.map(m => m.name).join("; ");
-      const materialQuantity = dayData.materials.map(m => `${m.quantity}`).join("; ");
-      
-      // Calculate material costs
-      const dailyMaterialCost = dayData.materials.reduce((sum, m) => sum + (m.quantity * m.costPerUnit), 0);
-      totalMaterialCost += dailyMaterialCost;
-      
-      // Process expenses
-      const expensesNames = dayData.expenses.map(e => e.name).join("; ");
-      const dailyExpenseAmount = dayData.expenses.reduce((sum, e) => sum + e.amount, 0);
-      totalExpenseAmount += dailyExpenseAmount;
-      
-      // Calculate cost per unit (total cost / total feed consumed)
-      const costPerUnit = totalFeedConsumed > 0 ? (totalMaterialCost + totalExpenseAmount) / totalFeedConsumed : 0;
-      
-      // Total amount for the day
-      const totalAmount = dailyMaterialCost + dailyExpenseAmount;
-
-      // Handle multiple rows if there are multiple materials/expenses on same day
-      if (dayData.materials.length > 0 || dayData.expenses.length > 0 || dailyFeedTotal > 0) {
-        const row = [
-          format(new Date(date), "dd-MM-yyyy"),
-          schedule1 > 0 ? schedule1.toString() : "",
-          schedule2 > 0 ? schedule2.toString() : "",
-          schedule3 > 0 ? schedule3.toString() : "",
-          schedule4 > 0 ? schedule4.toString() : "",
-          materialsUsed || "",
-          materialQuantity || "",
-          expensesNames || "",
-          totalFeedConsumed.toString(),
-          dailyFeedTotal.toString(),
-          costPerUnit > 0 ? costPerUnit.toFixed(2) : "",
-          totalAmount > 0 ? totalAmount.toString() : ""
-        ];
-
-        csvContent += row.map(cell => `"${cell}"`).join(",") + "\n";
+    // Add feeding rows - each feed type gets its own row
+    feedingByType.forEach((data, feedName) => {
+      const totalQuantity = data.schedule1 + data.schedule2 + data.schedule3 + data.schedule4;
+      if (totalQuantity > 0) {
+        const amount = totalQuantity * data.costPerUnit;
+        rows.push([
+          format(new Date(), "dd-MM-yyyy"), // Current date
+          data.schedule1 > 0 ? data.schedule1.toString() : "",
+          data.schedule2 > 0 ? data.schedule2.toString() : "",
+          data.schedule3 > 0 ? data.schedule3.toString() : "",
+          data.schedule4 > 0 ? data.schedule4.toString() : "",
+          "", // Materials used (empty for feeding rows)
+          "", // Material quantity (empty for feeding rows)
+          "", // Expenses Name (empty for feeding rows)
+          totalQuantity.toString(), // Quantity consumed till date
+          totalQuantity.toString(), // Total (same as quantity consumed for feeding)
+          data.costPerUnit.toString(), // Cost per unit from stock
+          amount.toString() // Amount = quantity * cost per unit
+        ]);
       }
+    });
+
+    // Add material rows - each material gets its own row
+    materialEntries.forEach(entry => {
+      const costPerUnit = priceByStockId.get(entry.stockId) || 0;
+      const amount = entry.quantity * costPerUnit;
+      
+      rows.push([
+        format(new Date(entry.createdAt), "dd-MM-yyyy"),
+        "", "", "", "", // Empty schedule columns
+        entry.stockName, // Materials used
+        entry.quantity.toString(), // Material quantity
+        "", // Expenses Name (empty for material rows)
+        "", // Quantity consumed till date (empty for material rows)
+        entry.quantity.toString(), // Total (quantity for materials)
+        costPerUnit.toString(), // Cost per unit from stock
+        amount.toString() // Amount = quantity * cost per unit
+      ]);
+    });
+
+    // Add expense rows - each expense gets its own row
+    expenseEntries.forEach(entry => {
+      rows.push([
+        format(new Date(entry.date), "dd-MM-yyyy"),
+        "", "", "", "", // Empty schedule columns
+        "", // Materials used (empty for expense rows)
+        "", // Material quantity (empty for expense rows)
+        entry.category || entry.name, // Expenses Name
+        "", // Quantity consumed till date (empty for expense rows)
+        "", // Total (empty for expense rows)
+        "", // Cost per unit (empty for expense rows)
+        entry.amount.toString() // Amount from expense entry
+      ]);
+    });
+
+    // Sort rows by date and add to CSV
+    rows.sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime());
+    rows.forEach(row => {
+      csvContent += row.map(cell => `"${cell}"`).join(",") + "\n";
     });
 
     // Create and download file
