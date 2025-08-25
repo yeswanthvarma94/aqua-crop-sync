@@ -288,7 +288,13 @@ const Reports = () => {
     ];
 
     let csvContent = headers.join(",") + "\n";
-    const rows: string[][] = [];
+    const allEntries: Array<{
+      date: Date;
+      dateStr: string;
+      type: 'feeding' | 'material' | 'expense';
+      amount: number;
+      row: string[];
+    }> = [];
 
     // Group feeding data by feed name and date, then aggregate by schedule
     const feedingByDateAndName = new Map<string, Map<string, { schedule1: number; schedule2: number; schedule3: number; schedule4: number; costPerUnit: number; }>>();
@@ -319,72 +325,109 @@ const Reports = () => {
       dateMap.set(feedName, existing);
     });
 
-    // Add feeding rows - each feed type per date gets its own row
-    feedingByDateAndName.forEach((feedMap, date) => {
+    // Add feeding entries
+    feedingByDateAndName.forEach((feedMap, dateStr) => {
       feedMap.forEach((data, feedName) => {
         const totalQuantity = data.schedule1 + data.schedule2 + data.schedule3 + data.schedule4;
         if (totalQuantity > 0) {
           const amount = totalQuantity * data.costPerUnit;
-          rows.push([
+          const date = new Date(dateStr.split('-').reverse().join('-')); // Convert dd-MM-yyyy to yyyy-MM-dd
+          
+          allEntries.push({
             date,
-            data.schedule1 > 0 ? `${feedName} ${data.schedule1}` : "",
-            data.schedule2 > 0 ? `${feedName} ${data.schedule2}` : "",
-            data.schedule3 > 0 ? `${feedName} ${data.schedule3}` : "",
-            data.schedule4 > 0 ? `${feedName} ${data.schedule4}` : "",
-            "", // Materials used (empty for feeding rows)
-            "", // Material quantity (empty for feeding rows)
-            "", // Expenses Name (empty for feeding rows)
-            totalQuantity.toString(), // Quantity consumed till date
-            totalQuantity.toString(), // Total (same as quantity consumed for feeding)
-            data.costPerUnit.toString(), // Cost per unit from stock
-            amount.toString() // Amount = quantity * cost per unit
-          ]);
+            dateStr,
+            type: 'feeding',
+            amount,
+            row: [
+              dateStr,
+              data.schedule1 > 0 ? `${feedName} ${data.schedule1}` : "",
+              data.schedule2 > 0 ? `${feedName} ${data.schedule2}` : "",
+              data.schedule3 > 0 ? `${feedName} ${data.schedule3}` : "",
+              data.schedule4 > 0 ? `${feedName} ${data.schedule4}` : "",
+              "", // Materials used (empty for feeding rows)
+              "", // Material quantity (empty for feeding rows)
+              "", // Expenses Name (empty for feeding rows)
+              totalQuantity.toString(), // Quantity consumed till date
+              "", // Total (will be calculated as running total)
+              data.costPerUnit.toString(), // Cost per unit from stock
+              amount.toString() // Amount = quantity * cost per unit
+            ]
+          });
         }
       });
     });
 
-    // Add material rows - each material gets its own row
+    // Add material entries
     materialEntries.forEach(entry => {
       const costPerUnit = priceByStockId.get(entry.stockId) || 0;
       const amount = entry.quantity * costPerUnit;
+      const date = new Date(entry.createdAt);
+      const dateStr = format(date, "dd-MM-yyyy");
       
-      rows.push([
-        format(new Date(entry.createdAt), "dd-MM-yyyy"),
-        "", "", "", "", // Empty schedule columns
-        entry.stockName, // Materials used
-        `${entry.quantity} ${entry.unit}`, // Material quantity with unit
-        "", // Expenses Name (empty for material rows)
-        "", // Quantity consumed till date (empty for material rows)
-        entry.quantity.toString(), // Total (quantity for materials)
-        costPerUnit.toString(), // Cost per unit from stock
-        amount.toString() // Amount = quantity * cost per unit
-      ]);
+      allEntries.push({
+        date,
+        dateStr,
+        type: 'material',
+        amount,
+        row: [
+          dateStr,
+          "", "", "", "", // Empty schedule columns
+          entry.stockName, // Materials used
+          `${entry.quantity} ${entry.unit}`, // Material quantity with unit
+          "", // Expenses Name (empty for material rows)
+          "", // Quantity consumed till date (empty for material rows)
+          "", // Total (will be calculated as running total)
+          costPerUnit.toString(), // Cost per unit from stock
+          amount.toString() // Amount = quantity * cost per unit
+        ]
+      });
     });
 
-    // Add expense rows - each expense gets its own row
-    expenseEntries.forEach(entry => {
-      rows.push([
-        format(new Date(entry.date), "dd-MM-yyyy"),
-        "", "", "", "", // Empty schedule columns
-        "", // Materials used (empty for expense rows)
-        "", // Material quantity (empty for expense rows)
-        entry.category || entry.name, // Expenses Name
-        "", // Quantity consumed till date (empty for expense rows)
-        "", // Total (empty for expense rows)  
-        "", // Cost per unit (empty for expense rows)
-        entry.amount.toString() // Amount from expense entry
-      ]);
+    // Filter out feed-related expenses and add non-feed expense entries
+    const nonFeedExpenses = expenseEntries.filter(entry => {
+      const entryName = (entry.name || entry.category || '').toLowerCase();
+      // Filter out expenses that contain feed-related keywords
+      return !entryName.includes('feed') && 
+             !entryName.includes('feeding') && 
+             entry.category !== 'feed';
     });
 
-    // Sort rows by date and add to CSV
-    rows.sort((a, b) => {
-      const dateA = new Date(a[0].split('-').reverse().join('-')); // Convert dd-MM-yyyy to yyyy-MM-dd
-      const dateB = new Date(b[0].split('-').reverse().join('-'));
-      return dateA.getTime() - dateB.getTime();
+    nonFeedExpenses.forEach(entry => {
+      const date = new Date(entry.date);
+      const dateStr = format(date, "dd-MM-yyyy");
+      
+      allEntries.push({
+        date,
+        dateStr,
+        type: 'expense',
+        amount: entry.amount,
+        row: [
+          dateStr,
+          "", "", "", "", // Empty schedule columns
+          "", // Materials used (empty for expense rows)
+          "", // Material quantity (empty for expense rows)
+          entry.category || entry.name, // Expenses Name
+          "", // Quantity consumed till date (empty for expense rows)
+          "", // Total (will be calculated as running total)
+          "", // Cost per unit (empty for expense rows)
+          entry.amount.toString() // Amount from expense entry
+        ]
+      });
+    });
+
+    // Sort all entries by date
+    allEntries.sort((a, b) => a.date.getTime() - b.date.getTime());
+    
+    // Calculate running totals and update rows
+    let runningTotal = 0;
+    allEntries.forEach(entry => {
+      runningTotal += entry.amount;
+      entry.row[9] = runningTotal.toString(); // Update Total column with running total
     });
     
-    rows.forEach(row => {
-      csvContent += row.map(cell => `"${cell}"`).join(",") + "\n";
+    // Add rows to CSV
+    allEntries.forEach(entry => {
+      csvContent += entry.row.map(cell => `"${cell}"`).join(",") + "\n";
     });
 
     // Create and download file
