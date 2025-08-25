@@ -271,31 +271,6 @@ const Reports = () => {
   const exportCSV = () => {
     if (!location || !tank) return;
 
-    // Group feeding data by feed type and calculate totals across all schedules
-    const feedingByType = new Map<string, { 
-      schedule1: number; 
-      schedule2: number; 
-      schedule3: number; 
-      schedule4: number; 
-      costPerUnit: number; 
-    }>();
-
-    feedEntries.forEach(entry => {
-      const existing = feedingByType.get(entry.stockName) || { 
-        schedule1: 0, schedule2: 0, schedule3: 0, schedule4: 0, 
-        costPerUnit: priceByStockName.get(entry.stockName) || 0 
-      };
-      
-      switch(entry.schedule) {
-        case "Schedule 1": existing.schedule1 += entry.quantity; break;
-        case "Schedule 2": existing.schedule2 += entry.quantity; break;
-        case "Schedule 3": existing.schedule3 += entry.quantity; break;
-        case "Schedule 4": existing.schedule4 += entry.quantity; break;
-      }
-      
-      feedingByType.set(entry.stockName, existing);
-    });
-
     // CSV Headers matching reference format
     const headers = [
       "Date",
@@ -315,26 +290,57 @@ const Reports = () => {
     let csvContent = headers.join(",") + "\n";
     const rows: string[][] = [];
 
-    // Add feeding rows - each feed type gets its own row
-    feedingByType.forEach((data, feedName) => {
-      const totalQuantity = data.schedule1 + data.schedule2 + data.schedule3 + data.schedule4;
-      if (totalQuantity > 0) {
-        const amount = totalQuantity * data.costPerUnit;
-        rows.push([
-          format(new Date(), "dd-MM-yyyy"), // Current date
-          data.schedule1 > 0 ? data.schedule1.toString() : "",
-          data.schedule2 > 0 ? data.schedule2.toString() : "",
-          data.schedule3 > 0 ? data.schedule3.toString() : "",
-          data.schedule4 > 0 ? data.schedule4.toString() : "",
-          "", // Materials used (empty for feeding rows)
-          "", // Material quantity (empty for feeding rows)
-          "", // Expenses Name (empty for feeding rows)
-          totalQuantity.toString(), // Quantity consumed till date
-          totalQuantity.toString(), // Total (same as quantity consumed for feeding)
-          data.costPerUnit.toString(), // Cost per unit from stock
-          amount.toString() // Amount = quantity * cost per unit
-        ]);
+    // Group feeding data by feed name and date, then aggregate by schedule
+    const feedingByDateAndName = new Map<string, Map<string, { schedule1: number; schedule2: number; schedule3: number; schedule4: number; costPerUnit: number; }>>();
+    
+    feedEntries.forEach(entry => {
+      const dateKey = format(new Date(entry.createdAt), "dd-MM-yyyy");
+      const feedName = entry.stockName;
+      
+      if (!feedingByDateAndName.has(dateKey)) {
+        feedingByDateAndName.set(dateKey, new Map());
       }
+      
+      const dateMap = feedingByDateAndName.get(dateKey)!;
+      const existing = dateMap.get(feedName) || { 
+        schedule1: 0, schedule2: 0, schedule3: 0, schedule4: 0, 
+        costPerUnit: priceByStockName.get(feedName) || 0 
+      };
+      
+      // Handle schedule values from database (could be "1", "2", "3", "4" or "Schedule 1", etc.)
+      const scheduleNum = entry.schedule.replace(/[^\d]/g, ''); // Extract just the number
+      switch(scheduleNum) {
+        case "1": existing.schedule1 += entry.quantity; break;
+        case "2": existing.schedule2 += entry.quantity; break;
+        case "3": existing.schedule3 += entry.quantity; break;
+        case "4": existing.schedule4 += entry.quantity; break;
+      }
+      
+      dateMap.set(feedName, existing);
+    });
+
+    // Add feeding rows - each feed type per date gets its own row
+    feedingByDateAndName.forEach((feedMap, date) => {
+      feedMap.forEach((data, feedName) => {
+        const totalQuantity = data.schedule1 + data.schedule2 + data.schedule3 + data.schedule4;
+        if (totalQuantity > 0) {
+          const amount = totalQuantity * data.costPerUnit;
+          rows.push([
+            date,
+            data.schedule1 > 0 ? `${feedName} ${data.schedule1}` : "",
+            data.schedule2 > 0 ? `${feedName} ${data.schedule2}` : "",
+            data.schedule3 > 0 ? `${feedName} ${data.schedule3}` : "",
+            data.schedule4 > 0 ? `${feedName} ${data.schedule4}` : "",
+            "", // Materials used (empty for feeding rows)
+            "", // Material quantity (empty for feeding rows)
+            "", // Expenses Name (empty for feeding rows)
+            totalQuantity.toString(), // Quantity consumed till date
+            totalQuantity.toString(), // Total (same as quantity consumed for feeding)
+            data.costPerUnit.toString(), // Cost per unit from stock
+            amount.toString() // Amount = quantity * cost per unit
+          ]);
+        }
+      });
     });
 
     // Add material rows - each material gets its own row
@@ -346,7 +352,7 @@ const Reports = () => {
         format(new Date(entry.createdAt), "dd-MM-yyyy"),
         "", "", "", "", // Empty schedule columns
         entry.stockName, // Materials used
-        entry.quantity.toString(), // Material quantity
+        `${entry.quantity} ${entry.unit}`, // Material quantity with unit
         "", // Expenses Name (empty for material rows)
         "", // Quantity consumed till date (empty for material rows)
         entry.quantity.toString(), // Total (quantity for materials)
@@ -364,14 +370,19 @@ const Reports = () => {
         "", // Material quantity (empty for expense rows)
         entry.category || entry.name, // Expenses Name
         "", // Quantity consumed till date (empty for expense rows)
-        "", // Total (empty for expense rows)
+        "", // Total (empty for expense rows)  
         "", // Cost per unit (empty for expense rows)
         entry.amount.toString() // Amount from expense entry
       ]);
     });
 
     // Sort rows by date and add to CSV
-    rows.sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime());
+    rows.sort((a, b) => {
+      const dateA = new Date(a[0].split('-').reverse().join('-')); // Convert dd-MM-yyyy to yyyy-MM-dd
+      const dateB = new Date(b[0].split('-').reverse().join('-'));
+      return dateA.getTime() - dateB.getTime();
+    });
+    
     rows.forEach(row => {
       csvContent += row.map(cell => `"${cell}"`).join(",") + "\n";
     });
