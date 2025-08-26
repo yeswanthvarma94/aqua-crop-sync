@@ -271,20 +271,19 @@ const Reports = () => {
   const exportCSV = () => {
     if (!location || !tank) return;
 
-    // CSV Headers matching reference format
+    // CSV Headers matching user specification
     const headers = [
       "Date",
+      "Expense name",
       "Schedule 1",
       "Schedule 2", 
       "Schedule 3",
       "Schedule 4",
-      "Materials used",
       "Material quantity",
-      "Expenses Name", 
-      "Quantity consumed till date",
-      "Total",
+      "Quantity consumed",
       "Cost per unit",
-      "Amount"
+      "Amount",
+      "Total"
     ];
 
     let csvContent = headers.join(",") + "\n";
@@ -331,7 +330,7 @@ const Reports = () => {
         const totalQuantity = data.schedule1 + data.schedule2 + data.schedule3 + data.schedule4;
         if (totalQuantity > 0) {
           const amount = totalQuantity * data.costPerUnit;
-          const date = new Date(dateStr.split('-').reverse().join('-')); // Convert dd-MM-yyyy to yyyy-MM-dd
+          const date = new Date(dateStr.split('-').reverse().join('-'));
           
           allEntries.push({
             date,
@@ -340,17 +339,16 @@ const Reports = () => {
             amount,
             row: [
               dateStr,
-              data.schedule1 > 0 ? `${feedName} ${data.schedule1}` : "",
-              data.schedule2 > 0 ? `${feedName} ${data.schedule2}` : "",
-              data.schedule3 > 0 ? `${feedName} ${data.schedule3}` : "",
-              data.schedule4 > 0 ? `${feedName} ${data.schedule4}` : "",
-              "", // Materials used (empty for feeding rows)
+              feedName, // Feed name in "Expense name" column
+              data.schedule1 > 0 ? data.schedule1.toString() : "", // Only quantity in Schedule 1
+              data.schedule2 > 0 ? data.schedule2.toString() : "", // Only quantity in Schedule 2
+              data.schedule3 > 0 ? data.schedule3.toString() : "", // Only quantity in Schedule 3
+              data.schedule4 > 0 ? data.schedule4.toString() : "", // Only quantity in Schedule 4
               "", // Material quantity (empty for feeding rows)
-              "", // Expenses Name (empty for feeding rows)
-              totalQuantity.toString(), // Quantity consumed till date
-              "", // Total (will be calculated as running total)
+              totalQuantity.toString(), // Quantity consumed
               data.costPerUnit.toString(), // Cost per unit from stock
-              amount.toString() // Amount = quantity * cost per unit
+              amount.toString(), // Amount = quantity * cost per unit
+              "" // Total (will be calculated as running total)
             ]
           });
         }
@@ -371,14 +369,13 @@ const Reports = () => {
         amount,
         row: [
           dateStr,
+          entry.stockName, // Material name in "Expense name" column
           "", "", "", "", // Empty schedule columns
-          entry.stockName, // Materials used
           `${entry.quantity} ${entry.unit}`, // Material quantity with unit
-          "", // Expenses Name (empty for material rows)
-          "", // Quantity consumed till date (empty for material rows)
-          "", // Total (will be calculated as running total)
+          "", // Quantity consumed (empty for material rows)
           costPerUnit.toString(), // Cost per unit from stock
-          amount.toString() // Amount = quantity * cost per unit
+          amount.toString(), // Amount = quantity * cost per unit
+          "" // Total (will be calculated as running total)
         ]
       });
     });
@@ -403,14 +400,13 @@ const Reports = () => {
         amount: entry.amount,
         row: [
           dateStr,
+          entry.category || entry.name, // Expense name in "Expense name" column
           "", "", "", "", // Empty schedule columns
-          "", // Materials used (empty for expense rows)
           "", // Material quantity (empty for expense rows)
-          entry.category || entry.name, // Expenses Name
-          "", // Quantity consumed till date (empty for expense rows)
-          "", // Total (will be calculated as running total)
+          "", // Quantity consumed (empty for expense rows)
           "", // Cost per unit (empty for expense rows)
-          entry.amount.toString() // Amount from expense entry
+          entry.amount.toString(), // Amount from expense entry
+          "" // Total (will be calculated as running total)
         ]
       });
     });
@@ -422,7 +418,7 @@ const Reports = () => {
     let runningTotal = 0;
     allEntries.forEach(entry => {
       runningTotal += entry.amount;
-      entry.row[9] = runningTotal.toString(); // Update Total column with running total
+      entry.row[10] = runningTotal.toString(); // Update Total column (position 10) with running total
     });
     
     // Add rows to CSV
