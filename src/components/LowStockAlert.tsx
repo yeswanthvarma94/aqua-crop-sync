@@ -78,24 +78,36 @@ const LowStockAlert = () => {
     return null;
   }
 
+  // Group items by location
+  const groupedByLocation = lowStockItems.reduce((acc, item) => {
+    if (!acc[item.locationName]) {
+      acc[item.locationName] = [];
+    }
+    acc[item.locationName].push(item);
+    return acc;
+  }, {} as Record<string, LowStockItem[]>);
+
   return (
-    <Alert variant="destructive" className="animate-slide-up">
-      <AlertTriangle className="h-4 w-4" />
-      <AlertTitle>Low Stock Alert</AlertTitle>
-      <AlertDescription>
-        <div className="space-y-2 mt-2">
-          {lowStockItems.map((item) => (
-            <div key={item.id} className="text-sm">
-              <span className="font-medium">{item.name}</span> at{" "}
-              <span className="font-medium">{item.locationName}</span>
-              <span className="text-muted-foreground ml-2">
-                ({item.quantity} remaining, min: {item.minStock})
-              </span>
+    <div className="space-y-4">
+      {Object.entries(groupedByLocation).map(([locationName, items]) => (
+        <Alert key={locationName} variant="destructive" className="animate-slide-up">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Low Stock Alert - {locationName}</AlertTitle>
+          <AlertDescription>
+            <div className="space-y-2 mt-2">
+              {items.map((item) => (
+                <div key={item.id} className="text-sm">
+                  <span className="font-medium">{item.name}</span>
+                  <span className="text-muted-foreground ml-2">
+                    ({item.quantity} remaining, min: {item.minStock})
+                  </span>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </AlertDescription>
-    </Alert>
+          </AlertDescription>
+        </Alert>
+      ))}
+    </div>
   );
 };
 

@@ -79,13 +79,13 @@ const Index = () => {
       </header>
 
       <main className="max-w-screen-md mx-auto px-4 pb-24 pt-6 space-y-6">
-        {/* Low Stock Alert */}
-        <LowStockAlert />
-
         {/* Quick actions */}
         <div className="animate-bounce-in">
           <QuickActionsGrid />
         </div>
+
+        {/* Low Stock Alert */}
+        <LowStockAlert />
       </main>
 
       <TabBar />
