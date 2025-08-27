@@ -14,6 +14,7 @@ import { useSelection } from "@/state/SelectionContext";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { useEffect as ReactUseEffect } from "react";
+import { Edit2, Trash2 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/state/AuthContext";
@@ -154,7 +155,7 @@ const Materials = () => {
         quantity: Number(e.quantity),
         time: new Date(e.logged_at).toISOString().slice(11, 16),
         notes: e.note || undefined,
-        createdAt: e.logged_at,
+        createdAt: e.id, // Use id for editing/deleting instead of logged_at
       }));
       setEntries(mapped);
     } else {
@@ -188,6 +189,94 @@ const Materials = () => {
     setNotes(entry.notes || "");
   };
 
+  const onDeleteMaterial = async (materialId: string) => {
+    if (!accountId) return;
+    
+    try {
+      // First get the material entry details to restore stock
+      const { data: materialEntry, error: fetchError } = await supabase
+        .from("material_logs")
+        .select("stock_id, quantity")
+        .eq("id", materialId)
+        .eq("account_id", accountId)
+        .single();
+
+      if (fetchError) {
+        console.error("Error fetching material entry:", fetchError);
+        throw fetchError;
+      }
+
+      if (!materialEntry) {
+        throw new Error("Material entry not found");
+      }
+
+      // Restore stock quantity
+      const { data: currentStock, error: stockFetchError } = await supabase
+        .from("stocks")
+        .select("quantity")
+        .eq("id", materialEntry.stock_id)
+        .single();
+
+      if (stockFetchError) {
+        console.error("Error fetching current stock:", stockFetchError);
+        throw stockFetchError;
+      }
+
+      const restoredQuantity = Number(currentStock.quantity) + Number(materialEntry.quantity);
+      
+      const { error: stockUpdateError } = await supabase
+        .from("stocks")
+        .update({ quantity: restoredQuantity })
+        .eq("id", materialEntry.stock_id);
+
+      if (stockUpdateError) {
+        console.error("Error restoring stock:", stockUpdateError);
+        throw stockUpdateError;
+      }
+
+      // Delete the material entry
+      const { error: deleteError } = await supabase
+        .from("material_logs")
+        .delete()
+        .eq("id", materialId)
+        .eq("account_id", accountId);
+
+      if (deleteError) {
+        console.error("Delete material entry error:", deleteError);
+        throw deleteError;
+      }
+
+      // Delete associated expense entries  
+      await supabase
+        .from("expenses")
+        .delete()
+        .eq("account_id", accountId)
+        .eq("tank_id", tank?.id)
+        .ilike("description", "%material usage%");
+      
+      console.log("Material entry deleted and stock restored successfully");
+      
+      // Force reload data
+      if (location?.id) {
+        await loadStocks(location.id);
+        if (tank?.id) {
+          await loadLogs(location.id, tank.id, todayKey);
+        }
+      }
+      setRev(r => r + 1);
+      
+      toast({ title: "Deleted", description: "Material usage removed and stock restored" });
+    } catch (error: any) {
+      console.error("Failed to delete material entry:", error);
+      const errorMsg = error?.message || "Failed to delete material entry. Please try again.";
+      toast({ 
+        title: "Error", 
+        description: errorMsg, 
+        variant: "destructive" 
+      });
+    }
+  };
+
   const saveUsage = async () => {
     if (!location?.id || !tank?.id || !accountId) return;
     if (!selectedStock) {
@@ -209,92 +298,171 @@ const Materials = () => {
         quantity,
         location: location.id,
         tank: tank.id,
-        account: accountId
+        account: accountId,
+        isEditing: !!editingMaterial
       });
       
       // Compute logged_at from selected date (todayKey) and time
       const loggedAt = new Date(`${todayKey}T${timeStr}:00.000Z`);
-
-      // 1) Insert material log with weighted average price
       const weightedAvgPrice = selectedStock.pricePerUnit || 0;
-      const { data: logData, error: logError } = await supabase
-        .from("material_logs")
-        .insert([{
-          account_id: accountId,
-          location_id: location.id,
-          tank_id: tank.id,
-          stock_id: selectedStock.id,
-          quantity,
-          price_per_unit: weightedAvgPrice, // Store weighted average price at time of usage
-          note: notes || null,
-          logged_at: loggedAt.toISOString(),
-        }])
-        .select();
-        
-      if (logError) {
-        console.error("Material log creation error:", logError);
-        throw logError;
-      }
-      
-      console.log("Material log created successfully:", logData?.[0]);
 
-      // 2) Fetch latest stock quantity and subtract used quantity
-      const { data: stockRow, error: stockFetchError } = await supabase
-        .from("stocks")
-        .select("quantity")
-        .eq("id", selectedStock.id)
-        .eq("account_id", accountId)
-        .maybeSingle();
-        
-      if (stockFetchError) {
-        console.error("Error fetching stock for update:", stockFetchError);
-        throw stockFetchError;
-      }
-      
-      const currentQty = Number(stockRow?.quantity ?? 0);
-      const newQty = Math.max(0, currentQty - Number(quantity));
-      
-      console.log("Updating stock quantity from", currentQty, "to", newQty);
-      
-      const { data: stockUpdateData, error: stockUpdateError } = await supabase
-        .from("stocks")
-        .update({ quantity: newQty, updated_at: new Date().toISOString() })
-        .eq("id", selectedStock.id)
-        .eq("account_id", accountId)
-        .select();
-        
-      if (stockUpdateError) {
-        console.error("Stock update error:", stockUpdateError);
-        throw stockUpdateError;
-      }
-      
-      console.log("Stock updated successfully:", stockUpdateData?.[0]);
+      if (editingMaterial) {
+        // Editing existing material entry
+        // 1) Get original entry to restore stock
+        const { data: originalEntry, error: fetchError } = await supabase
+          .from("material_logs")
+          .select("stock_id, quantity")
+          .eq("id", editingMaterial.id)
+          .single();
 
-      // 3) Create expense for material usage
-      const materialAmount = quantity * weightedAvgPrice;
-      const incurredDate = loggedAt.toISOString().slice(0, 10);
-      
-      const { data: expenseData, error: expenseError } = await supabase
-        .from("expenses")
-        .insert([{
-          account_id: accountId,
-          location_id: location.id,
-          tank_id: tank.id,
-          category: selectedStock.category,
-          name: `${selectedStock.name} ${selectedStock.category}`,
-          description: `Auto-added for material usage (₹${weightedAvgPrice.toFixed(2)}/unit)`,
-          amount: materialAmount,
-          incurred_at: incurredDate,
-          notes: notes || null,
-        }])
-        .select();
+        if (fetchError) throw fetchError;
+
+        // 2) Restore original quantity to stock
+        const { data: currentStock, error: stockFetchError } = await supabase
+          .from("stocks")
+          .select("quantity")
+          .eq("id", originalEntry.stock_id)
+          .single();
+
+        if (stockFetchError) throw stockFetchError;
+
+        const restoredQuantity = Number(currentStock.quantity) + Number(originalEntry.quantity);
         
-      if (expenseError) {
-        console.error("Expense creation error:", expenseError);
-        throw expenseError;
+        // 3) Subtract new quantity
+        const finalQuantity = restoredQuantity - quantity;
+        
+        if (finalQuantity < 0) {
+          throw new Error(`Insufficient stock. Available: ${restoredQuantity}, Required: ${quantity}`);
+        }
+
+        // 4) Update stock with final quantity
+        const { error: stockUpdateError } = await supabase
+          .from("stocks")
+          .update({ quantity: finalQuantity })
+          .eq("id", selectedStock.id);
+
+        if (stockUpdateError) throw stockUpdateError;
+
+        // 5) Update material log
+        const { error: updateError } = await supabase
+          .from("material_logs")
+          .update({
+            stock_id: selectedStock.id,
+            quantity: quantity,
+            price_per_unit: weightedAvgPrice,
+            note: notes || null,
+            logged_at: loggedAt.toISOString(),
+          })
+          .eq("id", editingMaterial.id);
+
+        if (updateError) throw updateError;
+
+        // 6) Update associated expense
+        const materialAmount = quantity * weightedAvgPrice;
+        const incurredDate = loggedAt.toISOString().slice(0, 10);
+        
+        await supabase
+          .from("expenses")
+          .update({
+            name: `${selectedStock.name} ${selectedStock.category}`,
+            description: `Auto-added for material usage (₹${weightedAvgPrice.toFixed(2)}/unit)`,
+            amount: materialAmount,
+            incurred_at: incurredDate,
+            notes: notes || null,
+          })
+          .eq("account_id", accountId)
+          .eq("tank_id", tank.id)
+          .eq("category", selectedStock.category)
+          .ilike("description", "%material usage%");
+
+        toast({ title: "Updated", description: "Material usage updated successfully" });
+      } else {
+        // Creating new material entry
+        // 1) Insert material log with weighted average price
+        const { data: logData, error: logError } = await supabase
+          .from("material_logs")
+          .insert([{
+            account_id: accountId,
+            location_id: location.id,
+            tank_id: tank.id,
+            stock_id: selectedStock.id,
+            quantity,
+            price_per_unit: weightedAvgPrice,
+            note: notes || null,
+            logged_at: loggedAt.toISOString(),
+          }])
+          .select();
+          
+        if (logError) {
+          console.error("Material log creation error:", logError);
+          throw logError;
+        }
+        
+        console.log("Material log created successfully:", logData?.[0]);
+
+        // 2) Fetch latest stock quantity and subtract used quantity
+        const { data: stockRow, error: stockFetchError } = await supabase
+          .from("stocks")
+          .select("quantity")
+          .eq("id", selectedStock.id)
+          .eq("account_id", accountId)
+          .maybeSingle();
+          
+        if (stockFetchError) {
+          console.error("Error fetching stock for update:", stockFetchError);
+          throw stockFetchError;
+        }
+        
+        const currentQty = Number(stockRow?.quantity ?? 0);
+        const newQty = Math.max(0, currentQty - Number(quantity));
+        
+        console.log("Updating stock quantity from", currentQty, "to", newQty);
+        
+        const { data: stockUpdateData, error: stockUpdateError } = await supabase
+          .from("stocks")
+          .update({ quantity: newQty, updated_at: new Date().toISOString() })
+          .eq("id", selectedStock.id)
+          .eq("account_id", accountId)
+          .select();
+          
+        if (stockUpdateError) {
+          console.error("Stock update error:", stockUpdateError);
+          throw stockUpdateError;
+        }
+        
+        console.log("Stock updated successfully:", stockUpdateData?.[0]);
+
+        // 3) Create expense for material usage
+        const materialAmount = quantity * weightedAvgPrice;
+        const incurredDate = loggedAt.toISOString().slice(0, 10);
+        
+        const { data: expenseData, error: expenseError } = await supabase
+          .from("expenses")
+          .insert([{
+            account_id: accountId,
+            location_id: location.id,
+            tank_id: tank.id,
+            category: selectedStock.category,
+            name: `${selectedStock.name} ${selectedStock.category}`,
+            description: `Auto-added for material usage (₹${weightedAvgPrice.toFixed(2)}/unit)`,
+            amount: materialAmount,
+            incurred_at: incurredDate,
+            notes: notes || null,
+          }])
+          .select();
+          
+        if (expenseError) {
+          console.error("Expense creation error:", expenseError);
+          throw expenseError;
+        }
+        
+        console.log("Expense created successfully:", expenseData?.[0]);
+
+        toast({ 
+          title: "Saved", 
+          description: `${selectedStock.name} — ${quantity} ${selectedStock.unit} (₹${materialAmount.toFixed(2)})` 
+        });
       }
-      
-      console.log("Expense created successfully:", expenseData?.[0]);
 
       // Reset inputs and refresh data
       setQuantity(0);
@@ -307,10 +475,6 @@ const Materials = () => {
       await loadLogs(location.id, tank.id, todayKey);
       
       setRev((r) => r + 1);
-      toast({ 
-        title: "Saved", 
-        description: `${selectedStock.name} — ${quantity} ${selectedStock.unit} (₹${materialAmount.toFixed(2)})` 
-      });
     } catch (e: any) {
       console.error("Failed to save material usage:", e);
       const errorMsg = e?.message || "Failed to save material usage. Please try again.";
@@ -428,12 +592,13 @@ const Materials = () => {
                       <TableHead>Unit</TableHead>
                       <TableHead>Category</TableHead>
                       <TableHead>Time</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {entries.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center text-muted-foreground">No usage logged yet.</TableCell>
+                        <TableCell colSpan={6} className="text-center text-muted-foreground">No usage logged yet.</TableCell>
                       </TableRow>
                     ) : (
                       entries.map((e, i) => (
@@ -443,6 +608,26 @@ const Materials = () => {
                           <TableCell className="uppercase">{e.unit}</TableCell>
                           <TableCell className="capitalize">{e.category}</TableCell>
                           <TableCell>{e.time}</TableCell>
+                          <TableCell>
+                            <div className="flex gap-1">
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => onEditMaterial(e, e.createdAt)}
+                                className="h-8 w-8 p-0"
+                              >
+                                <Edit2 className="h-3 w-3" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => onDeleteMaterial(e.createdAt)}
+                                className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </TableCell>
                         </TableRow>
                       ))
                     )}

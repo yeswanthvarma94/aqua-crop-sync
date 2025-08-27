@@ -246,6 +246,48 @@ const TankFeeding = () => {
     try {
       console.log("Deleting feeding entry:", feedingId, "Account:", accountId);
       
+      // First get the feeding entry details to restore stock
+      const { data: feedingEntry, error: fetchError } = await supabase
+        .from("feeding_logs")
+        .select("stock_id, quantity")
+        .eq("id", feedingId)
+        .eq("account_id", accountId)
+        .single();
+
+      if (fetchError) {
+        console.error("Error fetching feeding entry:", fetchError);
+        throw fetchError;
+      }
+
+      if (!feedingEntry) {
+        throw new Error("Feeding entry not found");
+      }
+
+      // Restore stock quantity
+      const { data: currentStock, error: stockFetchError } = await supabase
+        .from("stocks")
+        .select("quantity")
+        .eq("id", feedingEntry.stock_id)
+        .single();
+
+      if (stockFetchError) {
+        console.error("Error fetching current stock:", stockFetchError);
+        throw stockFetchError;
+      }
+
+      const restoredQuantity = Number(currentStock.quantity) + Number(feedingEntry.quantity);
+      
+      const { error: stockUpdateError } = await supabase
+        .from("stocks")
+        .update({ quantity: restoredQuantity })
+        .eq("id", feedingEntry.stock_id);
+
+      if (stockUpdateError) {
+        console.error("Error restoring stock:", stockUpdateError);
+        throw stockUpdateError;
+      }
+
+      // Delete the feeding entry
       const { data, error } = await supabase
         .from("feeding_logs")
         .delete()
@@ -261,13 +303,22 @@ const TankFeeding = () => {
       if (!data || data.length === 0) {
         throw new Error("No feeding entry was deleted. Entry may not exist or you may not have permission.");
       }
+
+      // Delete associated expense entries
+      await supabase
+        .from("expenses")
+        .delete()
+        .eq("account_id", accountId)
+        .eq("tank_id", tankId)
+        .eq("category", "feed")
+        .ilike("description", `%feeding%`);
       
-      console.log("Feeding entry deleted successfully");
+      console.log("Feeding entry deleted and stock restored successfully");
       
       // Force reload data to reflect changes
       await loadStocksFromDB(accountId!, locationId!).then(setStocks);
       setRev(r => r + 1);
-      toast({ title: "Deleted", description: "Feeding entry removed successfully" });
+      toast({ title: "Deleted", description: "Feeding entry removed and stock restored" });
     } catch (error: any) {
       console.error("Failed to delete feeding entry:", error);
       const errorMsg = error?.message || "Failed to delete feeding entry. Please try again.";
@@ -318,18 +369,74 @@ const TankFeeding = () => {
       const weightedAvgPrice = selectedStock.pricePerUnit || 0;
 
       if (editingFeeding) {
+        // Get original feeding entry to restore stock
+        const { data: originalEntry, error: fetchError } = await supabase
+          .from("feeding_logs")
+          .select("stock_id, quantity")
+          .eq("id", editingFeeding.id)
+          .single();
+
+        if (fetchError) throw fetchError;
+
+        // Restore original quantity to stock
+        const { data: currentStock, error: stockFetchError } = await supabase
+          .from("stocks")
+          .select("quantity")
+          .eq("id", originalEntry.stock_id)
+          .single();
+
+        if (stockFetchError) throw stockFetchError;
+
+        const restoredQuantity = Number(currentStock.quantity) + Number(originalEntry.quantity);
+        
+        // Now subtract the new quantity
+        const finalQuantity = restoredQuantity - quantity;
+        
+        if (finalQuantity < 0) {
+          throw new Error(`Insufficient stock. Available: ${restoredQuantity}, Required: ${quantity}`);
+        }
+
+        // Update stock with final quantity
+        const { error: stockUpdateError } = await supabase
+          .from("stocks")
+          .update({ quantity: finalQuantity })
+          .eq("id", selectedStock.id);
+
+        if (stockUpdateError) throw stockUpdateError;
+
         // Update existing feeding entry
         const { error: feedingError } = await supabase
           .from("feeding_logs")
           .update({
+            stock_id: selectedStock.id,
             schedule: schedule,
             quantity: quantity,
             fed_at: feedingTime.toISOString(),
+            price_per_unit: weightedAvgPrice,
             notes: notes || null,
           })
           .eq("id", editingFeeding.id);
 
         if (feedingError) throw feedingError;
+
+        // Update associated expense
+        const feedAmount = quantity * weightedAvgPrice;
+        const incurredDate = feedingTime.toISOString().slice(0, 10);
+        
+        await supabase
+          .from("expenses")
+          .update({
+            name: `${selectedStock.name} feed`,
+            description: `Auto-added for feeding schedule ${schedule} (₹${weightedAvgPrice.toFixed(2)}/unit)`,
+            amount: feedAmount,
+            incurred_at: incurredDate,
+            notes: notes || null,
+          })
+          .eq("account_id", accountId)
+          .eq("tank_id", tankId)
+          .eq("category", "feed")
+          .ilike("description", `%schedule ${editingFeeding.schedule}%`);
+
         toast({ title: "Updated", description: "Feeding entry updated successfully" });
       } else {
         // Create new feeding entry
