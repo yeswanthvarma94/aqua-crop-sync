@@ -180,13 +180,16 @@ const Stocks = () => {
       const amountDelta = Number(quantity) * Number(pricePerUnit);
 
       if (editingStock) {
+        // For editing: total_amount should be current quantity * current price
+        const totalAmountForAvailableStock = Number(quantity) * Number(pricePerUnit);
+        
         console.log("Updating stock:", editingStock.id, "with data:", {
           name,
           category,
           unit,
           quantity,
           price_per_unit: pricePerUnit,
-          total_amount: amountDelta,
+          total_amount: totalAmountForAvailableStock,
         });
         
         // Update existing stock
@@ -201,7 +204,7 @@ const Stocks = () => {
             min_stock: minStock,
             expiry_date: expiryDateStr,
             notes: notes || null,
-            total_amount: amountDelta,
+            total_amount: totalAmountForAvailableStock,
             updated_at: new Date().toISOString(),
           })
           .eq("id", editingStock.id)
@@ -239,21 +242,23 @@ const Stocks = () => {
           const existingQty = Number(existing.quantity || 0);
           const existingTotal = Number(existing.total_amount || 0);
           const newQty = existingQty + Number(quantity);
-          const newTotal = existingTotal + amountDelta;
           
           // Calculate weighted average price: (existing_qty * existing_avg_price + new_qty * new_price) / total_qty
           const existingAvgPrice = existingQty > 0 ? existingTotal / existingQty : 0;
           const weightedAvgPrice = newQty > 0 ? ((existingQty * existingAvgPrice) + (Number(quantity) * Number(pricePerUnit))) / newQty : 0;
           
+          // Total amount should be for available stock only: final_quantity * weighted_average_price
+          const totalAmountForAvailableStock = newQty * weightedAvgPrice;
+          
           const { data, error: updErr } = await supabase
             .from("stocks")
             .update({
               quantity: newQty,
-              price_per_unit: weightedAvgPrice, // Use weighted average instead of latest price
+              price_per_unit: weightedAvgPrice, // Use weighted average price
               min_stock: minStock,
               expiry_date: expiryDateStr,
               notes: notes || null,
-              total_amount: newTotal,
+              total_amount: totalAmountForAvailableStock, // Total value of available stock
               category,
               updated_at: new Date().toISOString(),
             })
@@ -501,7 +506,7 @@ const Stocks = () => {
                 })
               )}
             </TableBody>
-            <TableCaption className="px-4 pb-4">Totals are cumulative: sum of all purchase amounts.</TableCaption>
+            <TableCaption className="px-4 pb-4">Price/unit shows weighted average. Total amount reflects value of available stock.</TableCaption>
           </Table>
         </div>
       </main>
