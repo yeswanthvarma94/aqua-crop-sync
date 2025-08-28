@@ -189,7 +189,7 @@ const Stocks = () => {
           total_amount: amountDelta,
         });
         
-        // Update existing stock - keep the latest price and recalculate total
+        // Update existing stock
         const { data, error: updErr } = await supabase
           .from("stocks")
           .update({
@@ -197,11 +197,11 @@ const Stocks = () => {
             category,
             unit,
             quantity,
-            price_per_unit: pricePerUnit, // Use the current price as latest price
+            price_per_unit: pricePerUnit,
             min_stock: minStock,
             expiry_date: expiryDateStr,
             notes: notes || null,
-            total_amount: amountDelta, // Recalculate total based on new quantity and price
+            total_amount: amountDelta,
             updated_at: new Date().toISOString(),
           })
           .eq("id", editingStock.id)
@@ -241,16 +241,19 @@ const Stocks = () => {
           const newQty = existingQty + Number(quantity);
           const newTotal = existingTotal + amountDelta;
           
-          // Keep the latest price instead of weighted average for display purposes
+          // Calculate weighted average price: (existing_qty * existing_avg_price + new_qty * new_price) / total_qty
+          const existingAvgPrice = existingQty > 0 ? existingTotal / existingQty : 0;
+          const weightedAvgPrice = newQty > 0 ? ((existingQty * existingAvgPrice) + (Number(quantity) * Number(pricePerUnit))) / newQty : 0;
+          
           const { data, error: updErr } = await supabase
             .from("stocks")
             .update({
               quantity: newQty,
-              price_per_unit: pricePerUnit, // Use latest price instead of weighted average
+              price_per_unit: weightedAvgPrice, // Use weighted average instead of latest price
               min_stock: minStock,
               expiry_date: expiryDateStr,
               notes: notes || null,
-              total_amount: newTotal, // Total amount is cumulative
+              total_amount: newTotal,
               category,
               updated_at: new Date().toISOString(),
             })
