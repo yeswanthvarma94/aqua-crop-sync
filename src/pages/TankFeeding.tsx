@@ -16,7 +16,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/state/AuthContext";
-import { CalendarIcon, Edit2, Trash2 } from "lucide-react";
+import { CalendarIcon, Edit2 } from "lucide-react";
 
 
 interface Tank { id: string; locationId: string; name: string; type: "shrimp" | "fish" }
@@ -242,93 +242,6 @@ const TankFeeding = () => {
     }
   };
 
-  const onDeleteFeeding = async (feedingId: string) => {
-    try {
-      console.log("Deleting feeding entry:", feedingId, "Account:", accountId);
-      
-      // First get the feeding entry details to restore stock
-      const { data: feedingEntry, error: fetchError } = await supabase
-        .from("feeding_logs")
-        .select("stock_id, quantity")
-        .eq("id", feedingId)
-        .eq("account_id", accountId)
-        .single();
-
-      if (fetchError) {
-        console.error("Error fetching feeding entry:", fetchError);
-        throw fetchError;
-      }
-
-      if (!feedingEntry) {
-        throw new Error("Feeding entry not found");
-      }
-
-      // Restore stock quantity
-      const { data: currentStock, error: stockFetchError } = await supabase
-        .from("stocks")
-        .select("quantity")
-        .eq("id", feedingEntry.stock_id)
-        .single();
-
-      if (stockFetchError) {
-        console.error("Error fetching current stock:", stockFetchError);
-        throw stockFetchError;
-      }
-
-      const restoredQuantity = Number(currentStock.quantity) + Number(feedingEntry.quantity);
-      
-      const { error: stockUpdateError } = await supabase
-        .from("stocks")
-        .update({ quantity: restoredQuantity })
-        .eq("id", feedingEntry.stock_id);
-
-      if (stockUpdateError) {
-        console.error("Error restoring stock:", stockUpdateError);
-        throw stockUpdateError;
-      }
-
-      // Delete the feeding entry
-      const { data, error } = await supabase
-        .from("feeding_logs")
-        .delete()
-        .eq("id", feedingId)
-        .eq("account_id", accountId)
-        .select();
-
-      if (error) {
-        console.error("Delete feeding entry error:", error);
-        throw error;
-      }
-      
-      if (!data || data.length === 0) {
-        throw new Error("No feeding entry was deleted. Entry may not exist or you may not have permission.");
-      }
-
-      // Delete associated expense entries
-      await supabase
-        .from("expenses")
-        .delete()
-        .eq("account_id", accountId)
-        .eq("tank_id", tankId)
-        .eq("category", "feed")
-        .ilike("description", `%feeding%`);
-      
-      console.log("Feeding entry deleted and stock restored successfully");
-      
-      // Force reload data to reflect changes
-      await loadStocksFromDB(accountId!, locationId!).then(setStocks);
-      setRev(r => r + 1);
-      toast({ title: "Deleted", description: "Feeding entry removed and stock restored" });
-    } catch (error: any) {
-      console.error("Failed to delete feeding entry:", error);
-      const errorMsg = error?.message || "Failed to delete feeding entry. Please try again.";
-      toast({ 
-        title: "Error", 
-        description: errorMsg, 
-        variant: "destructive" 
-      });
-    }
-  };
 
   const saveFeedingEntry = async () => {
     if (isSaving) return; // Prevent multiple clicks
@@ -649,14 +562,6 @@ const TankFeeding = () => {
                             className="h-6 w-6 p-0"
                           >
                             <Edit2 className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onDeleteFeeding(e.id)}
-                            className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-3 w-3" />
                           </Button>
                         </div>
                       </li>
