@@ -267,8 +267,17 @@ const TankFeeding = () => {
       toast({ title: "Invalid quantity", description: "Quantity must be greater than zero." });
       return;
     }
-    if (quantity > remainingStock) {
-      toast({ title: "Insufficient stock", description: `Only ${remainingStock} ${selectedStock.unit} remaining.` });
+    
+    // Calculate available stock for validation
+    const availableStock = editingFeeding 
+      ? remainingStock + editingFeeding.quantity  // For editing: current stock + original quantity
+      : remainingStock;  // For new entries: just current stock
+    
+    if (quantity > availableStock) {
+      const stockMessage = editingFeeding 
+        ? `Available after restoring original entry: ${availableStock} ${selectedStock.unit}`
+        : `Only ${remainingStock} ${selectedStock.unit} remaining`;
+      toast({ title: "Insufficient stock", description: stockMessage });
       return;
     }
 
