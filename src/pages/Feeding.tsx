@@ -5,12 +5,17 @@ import TabBar from "@/components/TabBar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useNavigate } from "react-router-dom";
 import { useSelection } from "@/state/SelectionContext";
 import { useToast } from "@/hooks/use-toast";
 import { cropDayFromStartIST } from "@/lib/time";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/state/AuthContext";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
+import { CalendarIcon } from "lucide-react";
 
 interface Tank { id: string; locationId: string; name: string; type: "shrimp" | "fish" }
 interface TankDetail { seedDate?: string; cropEnd?: string }
@@ -40,6 +45,9 @@ const Feeding = () => {
   const { location, tank } = useSelection();
   const { toast } = useToast();
   const { accountId } = useAuth();
+  
+  // Date selection state
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   // If a tank is already selected in the header, jump straight to today's feeding for that tank
   useEffect(() => {
@@ -73,7 +81,8 @@ const Feeding = () => {
       toast({ title: "Inactive tank", description: "Start crop to enable feeding." });
       return;
     }
-    navigate(`/locations/${t.locationId}/tanks/${t.id}/feeding`);
+    const dateParam = format(selectedDate, "yyyy-MM-dd");
+    navigate(`/locations/${t.locationId}/tanks/${t.id}/feeding?date=${dateParam}`);
   };
 
   return (
@@ -82,7 +91,34 @@ const Feeding = () => {
         <div className="max-w-screen-md mx-auto px-4 py-3">
           <HeaderPickers />
           <div className="mt-2 flex items-center justify-between">
-            <h2 className="text-base font-semibold">Feeding</h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-base font-semibold">Feeding</h2>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      "w-auto h-8 justify-start text-left font-normal",
+                      !selectedDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="h-4 w-4" />
+                    {selectedDate ? format(selectedDate, "MMM dd") : <span>Date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={(date) => date && setSelectedDate(date)}
+                    disabled={(date) => date > new Date()}
+                    initialFocus
+                    className="p-3 pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
             <Button size="sm" variant="secondary" onClick={() => navigate("/")}>Home</Button>
           </div>
         </div>
