@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams, useLocation } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -94,14 +94,8 @@ const loadStocksFromDB = async (accountId: string, locationId: string): Promise<
 const TankFeeding = () => {
   const { locationId, tankId } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
   const { toast } = useToast();
   const { user, accountId } = useAuth();
-
-  // Get date from URL params or default to today
-  const urlParams = new URLSearchParams(location.search);
-  const dateParam = urlParams.get('date');
-  const initialDate = dateParam ? new Date(dateParam) : new Date();
 
   const [tank, setTank] = useState<Tank | null>(null);
   const [activeCrop, setActiveCrop] = useState<any>(null);
@@ -126,7 +120,7 @@ const TankFeeding = () => {
   const dayCounter = hasActiveCrop && seedDate ? cropDayFromStartIST(seedDate) : null;
 
   // Feeding state
-  const [selectedDate, setSelectedDate] = useState<Date>(initialDate);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const selectedDateKey = format(selectedDate, "yyyy-MM-dd");
   const [stocks, setStocks] = useState<StockRecord[]>([]);
   const feedStocks = useMemo(() => stocks.filter(s => s.category === "feed"), [stocks]);
