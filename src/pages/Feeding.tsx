@@ -143,7 +143,7 @@ const Feeding = () => {
         )}
       </main>
 
-      <TabBar />
+      
     </div>
   );
 };

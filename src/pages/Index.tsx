@@ -88,7 +88,7 @@ const Index = () => {
         <LowStockAlert />
       </main>
 
-      <TabBar />
+      
     </div>
   );
 };

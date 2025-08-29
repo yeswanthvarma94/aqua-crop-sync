@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { Home, Fish, Pill, Wallet, Settings as Gear } from "lucide-react";
 import { useAuth } from "@/state/AuthContext";
 const itemBase = "flex flex-col items-center justify-center gap-1 text-xs";
@@ -7,6 +7,13 @@ const itemInactive = "text-muted-foreground";
 
 const TabBar = () => {
   useAuth();
+  const location = useLocation();
+  
+  // Hide TabBar on auth pages
+  if (location.pathname === "/auth" || location.pathname === "/signup" || location.pathname === "/test-auth") {
+    return null;
+  }
+  
   const items = [
     { to: "/", label: "Home", icon: Home },
     { to: "/feeding", label: "Feeding", icon: Fish },

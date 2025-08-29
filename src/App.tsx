@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import TabBar from "./components/TabBar";
 import Index from "./pages/Index";
 import Feeding from "./pages/Feeding";
 import Materials from "./pages/Materials";
@@ -26,7 +27,12 @@ const queryClient = new QueryClient();
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
   const { user } = useAuth();
   if (!user) return <Navigate to="/auth" replace />;
-  return children;
+  return (
+    <div className="relative">
+      {children}
+      <TabBar />
+    </div>
+  );
 };
 
 const PublicOnlyRoute = ({ children }: { children: JSX.Element }) => {

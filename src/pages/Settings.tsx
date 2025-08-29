@@ -450,7 +450,7 @@ const Settings = () => {
         </Card>
       </main>
 
-      <TabBar />
+      
     </div>
   );
 };

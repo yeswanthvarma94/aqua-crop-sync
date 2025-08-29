@@ -639,7 +639,7 @@ const Materials = () => {
         )}
       </main>
 
-      <TabBar />
+      
     </div>
   );
 };

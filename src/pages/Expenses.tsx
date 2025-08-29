@@ -702,7 +702,7 @@ const Expenses = () => {
           </>
         )}
       </main>
-      <TabBar />
+      
     </div>
   );
 };
