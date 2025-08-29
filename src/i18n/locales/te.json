@@ -1,0 +1,40 @@
+{
+  "app": {
+    "title": "ఆక్వాలెడ్జర్",
+    "selectLanguage": "భాష ఎంచుకోండి"
+  },
+  "nav": {
+    "home": "హోమ్",
+    "feeding": "ఆహారం",
+    "materials": "పదార్థాలు",
+    "expenses": "ఖర్చులు", 
+    "settings": "సెట్టింగులు"
+  },
+  "actions": {
+    "add": "జోడించు",
+    "edit": "సవరించు",
+    "delete": "తొలగించు",
+    "save": "సేవ్ చేయి",
+    "cancel": "రద్దు చేయి",
+    "confirm": "నిర్ధారించు"
+  },
+  "feeding": {
+    "title": "ఆహార నిర్వహణ",
+    "selectTank": "ట్యాంక్ ఎంచుకోండి",
+    "addFeeding": "ఆహారం జోడించు"
+  },
+  "materials": {
+    "title": "పదార్థాల నిర్వహణ",
+    "addMaterial": "పదార్థం జోడించు"
+  },
+  "expenses": {
+    "title": "ఖర్చుల నిర్వహణ",
+    "addExpense": "ఖర్చు జోడించు"
+  },
+  "settings": {
+    "title": "సెట్టింగులు",
+    "profile": "ప్రొఫైల్",
+    "language": "భాష",
+    "theme": "థీమ్"
+  }
+}

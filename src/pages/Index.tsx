@@ -11,10 +11,12 @@ import { useAuth } from "@/state/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useTranslation } from "react-i18next";
 
 const Index = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [authStatus, setAuthStatus] = useState<string>("checking");
 
   useEffect(() => {
@@ -63,7 +65,7 @@ const Index = () => {
       <header className="sticky top-0 z-10 glass-header">
         <div className="max-w-screen-md mx-auto px-4 py-4 flex items-center justify-between">
           <div className="animate-fade-in">
-            <h1 className="text-xl font-bold text-gradient">AquaLedger</h1>
+            <h1 className="text-xl font-bold text-gradient">{t('app.title')}</h1>
             <p className="text-xs text-muted-foreground">
               {formatIST(nowIST(), "EEE, dd MMM yyyy • p zzz")}
             </p>

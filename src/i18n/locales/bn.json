@@ -1,0 +1,40 @@
+{
+  "app": {
+    "title": "অ্যাকুয়ালেজার",
+    "selectLanguage": "ভাষা নির্বাচন করুন"
+  },
+  "nav": {
+    "home": "হোম",
+    "feeding": "খাবার",
+    "materials": "উপকরণ",
+    "expenses": "খরচ",
+    "settings": "সেটিংস"
+  },
+  "actions": {
+    "add": "যোগ করুন",
+    "edit": "সম্পাদনা করুন",
+    "delete": "মুছে ফেলুন",
+    "save": "সংরক্ষণ করুন",
+    "cancel": "বাতিল করুন",
+    "confirm": "নিশ্চিত করুন"
+  },
+  "feeding": {
+    "title": "খাবার ব্যবস্থাপনা",
+    "selectTank": "ট্যাংক নির্বাচন করুন",
+    "addFeeding": "খাবার যোগ করুন"
+  },
+  "materials": {
+    "title": "উপকরণ ব্যবস্থাপনা",
+    "addMaterial": "উপকরণ যোগ করুন"
+  },
+  "expenses": {
+    "title": "খরচ ব্যবস্থাপনা",
+    "addExpense": "খরচ যোগ করুন"
+  },
+  "settings": {
+    "title": "সেটিংস",
+    "profile": "প্রোফাইল",
+    "language": "ভাষা",
+    "theme": "থিম"
+  }
+}

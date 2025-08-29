@@ -1,0 +1,40 @@
+{
+  "app": {
+    "title": "एक्वालेजर",
+    "selectLanguage": "भाषा चुनें"
+  },
+  "nav": {
+    "home": "होम",
+    "feeding": "भोजन",
+    "materials": "सामग्री",
+    "expenses": "खर्च",
+    "settings": "सेटिंग्स"
+  },
+  "actions": {
+    "add": "जोड़ें",
+    "edit": "संपादित करें",
+    "delete": "हटाएं",
+    "save": "सेव करें",
+    "cancel": "रद्द करें",
+    "confirm": "पुष्टि करें"
+  },
+  "feeding": {
+    "title": "भोजन प्रबंधन",
+    "selectTank": "टैंक चुनें",
+    "addFeeding": "भोजन जोड़ें"
+  },
+  "materials": {
+    "title": "सामग्री प्रबंधन",
+    "addMaterial": "सामग्री जोड़ें"
+  },
+  "expenses": {
+    "title": "खर्च प्रबंधन",
+    "addExpense": "खर्च जोड़ें"
+  },
+  "settings": {
+    "title": "सेटिंग्स",
+    "profile": "प्रोफाइल",
+    "language": "भाषा",
+    "theme": "थीम"
+  }
+}

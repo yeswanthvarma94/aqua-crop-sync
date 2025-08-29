@@ -1,6 +1,7 @@
 import { NavLink, useLocation } from "react-router-dom";
 import { Home, Fish, Pill, Wallet, Settings as Gear } from "lucide-react";
 import { useAuth } from "@/state/AuthContext";
+import { useTranslation } from "react-i18next";
 const itemBase = "flex flex-col items-center justify-center gap-1 text-xs";
 const itemActive = "text-primary";
 const itemInactive = "text-muted-foreground";
@@ -8,6 +9,7 @@ const itemInactive = "text-muted-foreground";
 const TabBar = () => {
   useAuth();
   const location = useLocation();
+  const { t } = useTranslation();
   
   // Hide TabBar on auth pages
   if (location.pathname === "/auth" || location.pathname === "/signup" || location.pathname === "/test-auth") {
@@ -15,11 +17,11 @@ const TabBar = () => {
   }
   
   const items = [
-    { to: "/", label: "Home", icon: Home },
-    { to: "/feeding", label: "Feeding", icon: Fish },
-    { to: "/materials", label: "Materials", icon: Pill },
-    { to: "/expenses", label: "Expenses", icon: Wallet },
-    { to: "/settings", label: "Settings", icon: Gear },
+    { to: "/", label: t("nav.home"), icon: Home },
+    { to: "/feeding", label: t("nav.feeding"), icon: Fish },
+    { to: "/materials", label: t("nav.materials"), icon: Pill },
+    { to: "/expenses", label: t("nav.expenses"), icon: Wallet },
+    { to: "/settings", label: t("nav.settings"), icon: Gear },
   ];
   const gridCols = "grid-cols-5";
   return (

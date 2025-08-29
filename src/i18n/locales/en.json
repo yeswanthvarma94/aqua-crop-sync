@@ -1,0 +1,40 @@
+{
+  "app": {
+    "title": "AquaLedger",
+    "selectLanguage": "Select Language"
+  },
+  "nav": {
+    "home": "Home",
+    "feeding": "Feeding",
+    "materials": "Materials", 
+    "expenses": "Expenses",
+    "settings": "Settings"
+  },
+  "actions": {
+    "add": "Add",
+    "edit": "Edit",
+    "delete": "Delete",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm"
+  },
+  "feeding": {
+    "title": "Feeding Management",
+    "selectTank": "Select Tank",
+    "addFeeding": "Add Feeding"
+  },
+  "materials": {
+    "title": "Materials Management",
+    "addMaterial": "Add Material"
+  },
+  "expenses": {
+    "title": "Expenses Management",
+    "addExpense": "Add Expense"
+  },
+  "settings": {
+    "title": "Settings",
+    "profile": "Profile",
+    "language": "Language",
+    "theme": "Theme"
+  }
+}

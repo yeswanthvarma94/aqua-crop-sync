@@ -1,0 +1,40 @@
+{
+  "app": {
+    "title": "એક્વાલેજર",
+    "selectLanguage": "ભાષા પસંદ કરો"
+  },
+  "nav": {
+    "home": "હોમ",
+    "feeding": "ખોરાક",
+    "materials": "સામગ્રી",
+    "expenses": "ખર્ચ",
+    "settings": "સેટિંગ્સ"
+  },
+  "actions": {
+    "add": "ઉમેરો",
+    "edit": "સંપાદિત કરો",
+    "delete": "કાઢી નાખો",
+    "save": "સેવ કરો",
+    "cancel": "રદ કરો",
+    "confirm": "પુષ્ટિ કરો"
+  },
+  "feeding": {
+    "title": "ખોરાક વ્યવસ્થાપન",
+    "selectTank": "ટાંકી પસંદ કરો",
+    "addFeeding": "ખોરાક ઉમેરો"
+  },
+  "materials": {
+    "title": "સામગ્રી વ્યવસ્થાપન",
+    "addMaterial": "સામગ્રી ઉમેરો"
+  },
+  "expenses": {
+    "title": "ખર્ચ વ્યવસ્થાપન",
+    "addExpense": "ખર્ચ ઉમેરો"
+  },
+  "settings": {
+    "title": "સેટિંગ્સ",
+    "profile": "પ્રોફાઇલ",
+    "language": "ભાષા",
+    "theme": "થીમ"
+  }
+}
