@@ -54,6 +54,9 @@ const QuickActionsGrid = () => {
       case "recycle":
         navigate("/recycle-bin");
         break;
+      case "calculators":
+        navigate("/calculators");
+        break;
       default:
         break;
     }
