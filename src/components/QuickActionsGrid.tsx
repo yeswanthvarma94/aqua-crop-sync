@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Building2, DatabaseZap, FileText, FlaskConical, Recycle, Scale, ShoppingCart, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useSelection } from "@/state/SelectionContext";
+import { useTranslation } from "react-i18next";
 
 const items = [
   { key: "locations", label: "Farms", icon: Building2 },
@@ -18,6 +19,18 @@ const items = [
 const QuickActionsGrid = () => {
   const navigate = useNavigate();
   const { location } = useSelection();
+  const { t } = useTranslation();
+
+  const items = [
+    { key: "locations", label: t("quickActions.farms"), icon: Building2 },
+    { key: "tanks", label: t("quickActions.tanks"), icon: DatabaseZap },
+    { key: "stock", label: t("quickActions.stock"), icon: ShoppingCart },
+    { key: "reports", label: t("quickActions.reports"), icon: FileText },
+    { key: "accounts", label: t("quickActions.accounts"), icon: Scale },
+    { key: "calculators", label: t("quickActions.calculators"), icon: FlaskConical },
+    { key: "recycle", label: t("quickActions.recycleBin"), icon: Recycle },
+    { key: "subscriptions", label: t("quickActions.subscriptions"), icon: Users },
+  ] as const;
 
   const handleNav = (key: string) => {
     switch (key) {
@@ -51,7 +64,7 @@ const QuickActionsGrid = () => {
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-lg">
           <div className="w-2 h-2 rounded-full bg-accent animate-pulse"></div>
-          Quick Actions
+          {t("quickActions.title")}
         </CardTitle>
       </CardHeader>
       <CardContent>

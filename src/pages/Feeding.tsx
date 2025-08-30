@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cropDayFromStartIST } from "@/lib/time";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/state/AuthContext";
+import { useTranslation } from "react-i18next";
 
 interface Tank { id: string; locationId: string; name: string; type: "shrimp" | "fish" }
 interface TankDetail { seedDate?: string; cropEnd?: string }
@@ -40,6 +41,7 @@ const Feeding = () => {
   const { location, tank } = useSelection();
   const { toast } = useToast();
   const { accountId } = useAuth();
+  const { t } = useTranslation();
 
   // If a tank is already selected in the header, jump straight to today's feeding for that tank
   useEffect(() => {
@@ -67,13 +69,13 @@ const Feeding = () => {
 
   const tanks = useMemo(() => tanksAll.filter((t) => t.locationId === location?.id), [tanksAll, location?.id]);
 
-  const goFeeding = async (t: Tank) => {
-    const d = activeMap[t.id];
+  const goFeeding = async (tank: Tank) => {
+    const d = activeMap[tank.id];
     if (!d || !d.seedDate || d.cropEnd) {
-      toast({ title: "Inactive tank", description: "Start crop to enable feeding." });
+      toast({ title: t("feeding.inactiveTank"), description: t("feeding.startCropToFeed") });
       return;
     }
-    navigate(`/locations/${t.locationId}/tanks/${t.id}/feeding`);
+    navigate(`/locations/${tank.locationId}/tanks/${tank.id}/feeding`);
   };
 
   return (
@@ -82,8 +84,8 @@ const Feeding = () => {
         <div className="max-w-screen-md mx-auto px-4 py-3">
           <HeaderPickers />
           <div className="mt-2 flex items-center justify-between">
-            <h2 className="text-base font-semibold">Feeding</h2>
-            <Button size="sm" variant="secondary" onClick={() => navigate("/")}>Home</Button>
+            <h2 className="text-base font-semibold">{t("feeding.title")}</h2>
+            <Button size="sm" variant="secondary" onClick={() => navigate("/")}>{t("nav.home")}</Button>
           </div>
         </div>
       </header>
