@@ -22,7 +22,6 @@ import Auth from "./pages/Auth";
 import SignUp from "./pages/SignUp";
 import TestAuth from "./pages/TestAuth";
 import RecycleBin from "./pages/RecycleBin";
-import Calculators from "./pages/Calculators";
 const queryClient = new QueryClient();
 
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
@@ -65,7 +64,6 @@ const App = () => (
               <Route path="/locations/:locationId/tanks/:tankId/feeding" element={<ProtectedRoute><TankFeeding /></ProtectedRoute>} />
               <Route path="/locations/:locationId/stocks" element={<ProtectedRoute><Stocks /></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
-              <Route path="/calculators" element={<ProtectedRoute><Calculators /></ProtectedRoute>} />
               <Route path="/recycle-bin" element={<ProtectedRoute><RecycleBin /></ProtectedRoute>} />
               
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
