@@ -272,6 +272,95 @@
     "recycleBin": "Recycle Bin",
     "subscriptions": "Subscriptions"
   },
+  "calculators": {
+    "title": "Aquaculture Calculators",
+    "subtitle": "Professional tools for efficient farm management",
+    "selectCalculator": "Select Calculator",
+    "formulas": "Formulas",
+    "inputs": "Inputs",
+    "results": "Results",
+    "guidelines": "Guidelines",
+    "disclaimer": "These calculations are approximations based on your inputs. Actual results may vary depending on pond conditions, shrimp health, and water quality. Use as a guide for farm management decisions.",
+    "cultivationPerformance": {
+      "title": "Cultivation Performance",
+      "description": "Calculate biomass, population, FCR, and survival rate",
+      "initialStocking": "Initial Stocking (PL)",
+      "abw": "Average Body Weight (g)",
+      "feedingRate": "Feeding Rate (%)",
+      "survivalRate": "Survival Rate (%)",
+      "dailyFeed": "Daily Feed (kg)",
+      "cumulativeFeed": "Cumulative Feed (kg)",
+      "biomass": "Biomass (kg)",
+      "population": "Population (PL)",
+      "fcr": "Feed Conversion Ratio",
+      "biomassFormula": "Biomass = Daily Feed ÷ Feeding Rate",
+      "populationFormula": "Population = Biomass × 1000 ÷ ABW",
+      "fcrFormula": "FCR = Cumulative Feed ÷ Biomass",
+      "survivalFormula": "Survival Rate = Population ÷ Initial Stocking × 100"
+    },
+    "dailyFeed": {
+      "title": "Daily Feed Calculator",
+      "description": "Calculate optimal daily feed amount for your shrimp",
+      "formula": "Daily Feed = (Initial Stocking × ABW × FR × SR) ÷ 1000",
+      "result": "Daily Feed Required"
+    },
+    "productAmount": {
+      "title": "Product Amount Calculator", 
+      "description": "Calculate required product amount for pond treatment",
+      "productType": "Product Type",
+      "solid": "Solid",
+      "powder": "Powder",
+      "pondArea": "Pond Area (m²)",
+      "waterLevel": "Water Level (m)",
+      "dosage": "Dosage",
+      "ppm": "ppm",
+      "mgL": "mg/L",
+      "formula": "Amount = (Pond Area × Water Level × Dosage) ÷ 1000",
+      "result": "Product Amount Required (kg)"
+    },
+    "ammonia": {
+      "title": "Ammonia (NH3) Calculator",
+      "description": "Calculate toxic ammonia levels in your pond",
+      "temperature": "Temperature (°C)",
+      "ph": "pH Level",
+      "tan": "Total Ammonia Nitrogen (mg/L)",
+      "formula": "NH3 = TAN × (1 ÷ (1 + 10^(pKa - pH)))",
+      "result": "NH3 Level (mg/L)",
+      "safe": "Safe Level",
+      "caution": "Caution Level", 
+      "danger": "Danger Level"
+    },
+    "checkTray": {
+      "title": "Check Tray Calculator",
+      "description": "Get feeding recommendations based on tray observations",
+      "estimatedPopulation": "Estimated Population",
+      "avgAnimalSize": "Average Animal Size/Count",
+      "abwMode": "ABW (g)",
+      "countMode": "Count per kg",
+      "mealsPerDay": "Number of meals per day",
+      "nextMeal": "Next meal number",
+      "lastMealAmount": "Previous day's last meal feed amount (kg)",
+      "trayObservation": "Check tray observation",
+      "observations": {
+        "empty": "Empty tray - No leftover feed",
+        "slight": "Slight leftover - Less than 10%",
+        "moderate": "Moderate leftover - 10-30%",
+        "heavy": "Heavy leftover - More than 30%"
+      },
+      "recommendations": {
+        "increase": "Increase feed by 10-15%",
+        "maintain": "Maintain current feeding rate",
+        "decrease": "Decrease feed by 10-15%",
+        "significant_decrease": "Decrease feed by 20-30%"
+      }
+    },
+    "status": {
+      "excellent": "Excellent",
+      "good": "Good", 
+      "caution": "Caution",
+      "poor": "Poor"
+    }
+  },
   "headers": {
     "selectFarm": "Select Farm",
     "selectTank": "Select Tank"
