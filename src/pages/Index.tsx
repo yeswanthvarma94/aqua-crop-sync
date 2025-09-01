@@ -1,7 +1,6 @@
 import HeaderPickers from "@/components/HeaderPickers";
 import SyncBadge from "@/components/SyncBadge";
 import QuickActionsGrid from "@/components/QuickActionsGrid";
-import WeatherWidget from "@/components/WeatherWidget";
 import TabBar from "@/components/TabBar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -82,11 +81,6 @@ const Index = () => {
       </header>
 
       <main className="max-w-screen-md mx-auto px-4 pb-24 pt-6 space-y-6">
-        {/* Weather Widget */}
-        <div className="animate-fade-in">
-          <WeatherWidget />
-        </div>
-
         {/* Quick actions */}
         <div className="animate-bounce-in">
           <QuickActionsGrid />
