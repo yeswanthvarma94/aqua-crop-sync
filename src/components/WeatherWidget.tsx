@@ -207,29 +207,56 @@ const WeatherWidget = () => {
             {isLoading ? (
               Array(5).fill(0).map((_, index) => (
                 <div key={index} className="flex flex-col items-center min-w-0 flex-1">
-                  <div className="text-3xl mb-1 text-gray-400">🌑</div>
+                  <div className="relative w-8 h-8 mb-2">
+                    <div className="w-8 h-8 rounded-full bg-gray-600 animate-pulse"></div>
+                  </div>
                   <div className="text-xs text-center text-gray-300">Loading...</div>
                 </div>
               ))
             ) : (
-              weatherData.tithi.slice(0, 5).map((tithi, index) => (
-                <div key={index} className="flex flex-col items-center min-w-0 flex-1">
-                  <div 
-                    className={`text-3xl mb-1 ${
-                      tithi.isHighlighted 
-                        ? 'filter drop-shadow-[0_0_8px_rgba(255,165,0,0.8)] text-orange-400' 
-                        : 'text-gray-400'
-                    }`}
-                  >
-                    {tithi.phase}
+              weatherData.tithi.slice(0, 5).map((tithi, index) => {
+                // Create moon phase visual based on tithi name
+                const getMoonPhaseGradient = (name: string) => {
+                  const phases: Record<string, string> = {
+                    'Pratipada': '90deg, transparent 0%, transparent 85%, #fbbf24 85%, #fbbf24 100%',
+                    'Dwitiya': '90deg, transparent 0%, transparent 75%, #fbbf24 75%, #fbbf24 100%',
+                    'Tritiya': '90deg, transparent 0%, transparent 65%, #fbbf24 65%, #fbbf24 100%',
+                    'Chaturthi': '90deg, transparent 0%, transparent 50%, #fbbf24 50%, #fbbf24 100%',
+                    'Panchami': '90deg, transparent 0%, transparent 35%, #fbbf24 35%, #fbbf24 100%',
+                    'Shashthi': '90deg, transparent 0%, transparent 25%, #fbbf24 25%, #fbbf24 100%',
+                    'Saptami': '90deg, transparent 0%, transparent 15%, #fbbf24 15%, #fbbf24 100%',
+                    'Ashtami': '90deg, transparent 0%, transparent 5%, #f59e0b 5%, #f59e0b 100%',
+                    'Navami': '90deg, transparent 0%, transparent 5%, #f59e0b 5%, #f59e0b 100%',
+                    'Dashami': '270deg, transparent 0%, transparent 15%, #fbbf24 15%, #fbbf24 100%',
+                    'Ekadashi': '270deg, transparent 0%, transparent 25%, #fbbf24 25%, #fbbf24 100%',
+                    'Dwadashi': '270deg, transparent 0%, transparent 35%, #fbbf24 35%, #fbbf24 100%',
+                    'Trayodashi': '270deg, transparent 0%, transparent 50%, #fbbf24 50%, #fbbf24 100%',
+                    'Chaturdashi': '270deg, transparent 0%, transparent 75%, #fbbf24 75%, #fbbf24 100%',
+                    'Purnima': 'radial-gradient(circle, #f59e0b 0%, #fbbf24 100%)',
+                    'Amavasya': 'radial-gradient(circle, transparent 0%, transparent 100%)'
+                  };
+                  return phases[name] || '90deg, transparent 0%, transparent 50%, #fbbf24 50%, #fbbf24 100%';
+                };
+
+                return (
+                  <div key={index} className="flex flex-col items-center min-w-0 flex-1">
+                    <div className="relative w-8 h-8 mb-2">
+                      <div 
+                        className="w-8 h-8 rounded-full border border-gray-500"
+                        style={{
+                          background: getMoonPhaseGradient(tithi.name),
+                          filter: tithi.isHighlighted ? 'drop-shadow(0 0 8px rgba(251, 191, 36, 0.6))' : 'none'
+                        }}
+                      ></div>
+                    </div>
+                    <div className={`text-xs text-center ${
+                      tithi.isHighlighted ? 'text-orange-400 font-medium' : 'text-gray-300'
+                    }`}>
+                      {tithi.name}
+                    </div>
                   </div>
-                  <div className={`text-xs text-center ${
-                    tithi.isHighlighted ? 'text-orange-400 font-medium' : 'text-gray-300'
-                  }`}>
-                    {tithi.name}
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
             <div className="w-6" /> {/* Spacer to align with forecast */}
           </div>
