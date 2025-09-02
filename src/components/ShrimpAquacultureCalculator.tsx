@@ -124,36 +124,6 @@ const ShrimpAquacultureCalculator = () => {
 
     const finalDailyFeedKg = baseDailyFeedKg * trayFactor * environmentFactor;
 
-    // Meal distribution (5 meals: dawn optional)
-    const mealsPerDay = inputs.docDays < 30 ? 5 : inputs.docDays < 90 ? 4 : 3;
-    const nightShare = 0.65; // 65% at night
-    const dayShare = 0.35; // 35% during day
-    
-    let mealSchedule: { time: string; amount: number }[] = [];
-    
-    if (mealsPerDay === 5) {
-      mealSchedule = [
-        { time: '6-8 AM', amount: finalDailyFeedKg * 0.10 },
-        { time: '12-2 PM', amount: finalDailyFeedKg * 0.15 },
-        { time: '6-8 PM', amount: finalDailyFeedKg * 0.10 },
-        { time: '10-12 PM', amount: finalDailyFeedKg * 0.35 },
-        { time: '4-6 AM', amount: finalDailyFeedKg * 0.30 }
-      ];
-    } else if (mealsPerDay === 4) {
-      mealSchedule = [
-        { time: '7-9 AM', amount: finalDailyFeedKg * 0.15 },
-        { time: '1-3 PM', amount: finalDailyFeedKg * 0.20 },
-        { time: '7-9 PM', amount: finalDailyFeedKg * 0.30 },
-        { time: '11 PM-1 AM', amount: finalDailyFeedKg * 0.35 }
-      ];
-    } else {
-      mealSchedule = [
-        { time: '8-10 AM', amount: finalDailyFeedKg * 0.25 },
-        { time: '6-8 PM', amount: finalDailyFeedKg * 0.35 },
-        { time: '11 PM-1 AM', amount: finalDailyFeedKg * 0.40 }
-      ];
-    }
-
     // Growth projections
     const expectedWeeklyGrowth = inputs.docDays < 60 ? 15 : inputs.docDays < 90 ? 12 : 8;
     const nextWeekCount = Math.max(20, inputs.countPerKg - expectedWeeklyGrowth);
@@ -165,9 +135,7 @@ const ShrimpAquacultureCalculator = () => {
       trayFactor,
       environmentFactor,
       finalDailyFeedKg,
-      mealSchedule,
-      nextWeekCount,
-      mealsPerDay
+      nextWeekCount
     };
   }, [inputs]);
 
@@ -241,7 +209,7 @@ const ShrimpAquacultureCalculator = () => {
       <div className="grid md:grid-cols-2 gap-6">
         {/* Input Section */}
         <div className="space-y-6">
-          {/* Basic Parameters */}
+          {/* All Parameters in One Card */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -249,320 +217,311 @@ const ShrimpAquacultureCalculator = () => {
                 Basic Parameters
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Pond Area (acres)</Label>
-                  <Select value={inputs.pondArea.toString()} onValueChange={(v) => updateInput('pondArea', parseFloat(v))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="0.5">0.5</SelectItem>
-                      <SelectItem value="1.0">1.0</SelectItem>
-                      <SelectItem value="1.5">1.5</SelectItem>
-                      <SelectItem value="2.0">2.0</SelectItem>
-                    </SelectContent>
-                  </Select>
+            <CardContent className="space-y-6">
+              {/* Basic Parameters */}
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Pond Area (acres)</Label>
+                    <Input 
+                      type="number" 
+                      value={inputs.pondArea}
+                      onChange={(e) => updateInput('pondArea', parseFloat(e.target.value) || 0)}
+                      min="0.1"
+                      max="10"
+                      step="0.1"
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label>DOC (Days)</Label>
+                    <Input 
+                      type="number" 
+                      value={inputs.docDays}
+                      onChange={(e) => updateInput('docDays', parseInt(e.target.value) || 0)}
+                      min="1"
+                      max="150"
+                    />
+                  </div>
                 </div>
+
+                <div>
+                  <Label>Initial PL Stocked</Label>
+                  <Input 
+                    type="number" 
+                    value={inputs.initialStocked}
+                    onChange={(e) => updateInput('initialStocked', parseInt(e.target.value) || 0)}
+                    min="10000"
+                    max="500000"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Survival Rate (%)</Label>
+                    <Select value={inputs.survivalRate.toString()} onValueChange={(v) => updateInput('survivalRate', parseInt(v))}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="95">95%</SelectItem>
+                        <SelectItem value="90">90%</SelectItem>
+                        <SelectItem value="85">85%</SelectItem>
+                        <SelectItem value="80">80%</SelectItem>
+                        <SelectItem value="75">75%</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div>
+                    <Label>Feeding Rate (%)</Label>
+                    <Input 
+                      type="number" 
+                      value={inputs.feedingRate}
+                      onChange={(e) => updateInput('feedingRate', parseFloat(e.target.value) || 0)}
+                      min="2"
+                      max="10"
+                      step="0.1"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Shrimp Size */}
+              <div className="space-y-4">
+                <h4 className="font-semibold flex items-center gap-2">
+                  <Gauge className="h-4 w-4" />
+                  Shrimp Size
+                </h4>
                 
-                <div>
-                  <Label>DOC (Days)</Label>
-                  <Input 
-                    type="number" 
-                    value={inputs.docDays}
-                    onChange={(e) => updateInput('docDays', parseInt(e.target.value) || 0)}
-                    min="1"
-                    max="150"
-                  />
+                <div className="flex gap-2">
+                  <Button 
+                    variant={inputs.usingSizeType === 'count' ? 'default' : 'outline'}
+                    onClick={() => updateInput('usingSizeType', 'count')}
+                    className="flex-1"
+                  >
+                    COUNT/KG
+                  </Button>
+                  <Button 
+                    variant={inputs.usingSizeType === 'abw' ? 'default' : 'outline'}
+                    onClick={() => updateInput('usingSizeType', 'abw')}
+                    className="flex-1"
+                  >
+                    ABW (g)
+                  </Button>
+                </div>
+
+                {inputs.usingSizeType === 'count' ? (
+                  <div>
+                    <Label>COUNT per kg</Label>
+                    <Select value={inputs.countPerKg.toString()} onValueChange={(v) => updateInput('countPerKg', parseInt(v))}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="200">200+</SelectItem>
+                        <SelectItem value="175">150-200</SelectItem>
+                        <SelectItem value="125">100-150</SelectItem>
+                        <SelectItem value="90">80-100</SelectItem>
+                        <SelectItem value="70">60-80</SelectItem>
+                        <SelectItem value="55">50-60</SelectItem>
+                        <SelectItem value="45">40-50</SelectItem>
+                        <SelectItem value="35">30-40</SelectItem>
+                        <SelectItem value="25">20-30</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <div>
+                    <Label>ABW (grams)</Label>
+                    <Input 
+                      type="number" 
+                      value={inputs.abwGrams}
+                      onChange={(e) => updateInput('abwGrams', parseFloat(e.target.value) || 0)}
+                      min="0.1"
+                      max="30"
+                      step="0.1"
+                    />
+                  </div>
+                )}
+
+                <div className="text-sm text-muted-foreground p-2 bg-secondary/20 rounded">
+                  {inputs.usingSizeType === 'count' 
+                    ? `ABW: ${inputs.abwGrams.toFixed(2)} g`
+                    : `COUNT: ${inputs.countPerKg.toFixed(0)} per kg`
+                  }
                 </div>
               </div>
 
-              <div>
-                <Label>Initial PL Stocked</Label>
-                <Select value={inputs.initialStocked.toString()} onValueChange={(v) => updateInput('initialStocked', parseInt(v))}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="50000">50,000</SelectItem>
-                    <SelectItem value="100000">100,000</SelectItem>
-                    <SelectItem value="150000">150,000</SelectItem>
-                    <SelectItem value="200000">200,000</SelectItem>
-                    <SelectItem value="250000">250,000</SelectItem>
-                    <SelectItem value="300000">300,000</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <Separator />
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Survival Rate (%)</Label>
-                  <Select value={inputs.survivalRate.toString()} onValueChange={(v) => updateInput('survivalRate', parseInt(v))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="95">95%</SelectItem>
-                      <SelectItem value="90">90%</SelectItem>
-                      <SelectItem value="85">85%</SelectItem>
-                      <SelectItem value="80">80%</SelectItem>
-                      <SelectItem value="75">75%</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              {/* Check Tray Assessment */}
+              <div className="space-y-4">
+                <h4 className="font-semibold flex items-center gap-2">
+                  <Info className="h-4 w-4" />
+                  Check Tray Assessment
+                </h4>
                 
-                <div>
-                  <Label>Feeding Rate (%)</Label>
-                  <Input 
-                    type="number" 
-                    value={inputs.feedingRate}
-                    onChange={(e) => updateInput('feedingRate', parseFloat(e.target.value) || 0)}
-                    min="2"
-                    max="10"
-                    step="0.1"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Number of Trays</Label>
+                    <Select value={inputs.numberOfTrays.toString()} onValueChange={(v) => updateInput('numberOfTrays', parseInt(v))}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="2">2</SelectItem>
+                        <SelectItem value="3">3</SelectItem>
+                        <SelectItem value="4">4</SelectItem>
+                        <SelectItem value="5">5</SelectItem>
+                        <SelectItem value="6">6</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label>Coverage</Label>
+                    <Select value={inputs.coverage} onValueChange={(v) => updateInput('coverage', v as any)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="good">≥75% (Good)</SelectItem>
+                        <SelectItem value="poor">&lt;75% (Add trays)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
 
-          {/* Shrimp Size */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Gauge className="h-5 w-5" />
-                Shrimp Size
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex gap-2">
-                <Button 
-                  variant={inputs.usingSizeType === 'count' ? 'default' : 'outline'}
-                  onClick={() => updateInput('usingSizeType', 'count')}
-                  className="flex-1"
-                >
-                  COUNT/KG
-                </Button>
-                <Button 
-                  variant={inputs.usingSizeType === 'abw' ? 'default' : 'outline'}
-                  onClick={() => updateInput('usingSizeType', 'abw')}
-                  className="flex-1"
-                >
-                  ABW (g)
-                </Button>
-              </div>
-
-              {inputs.usingSizeType === 'count' ? (
                 <div>
-                  <Label>COUNT per kg</Label>
-                  <Select value={inputs.countPerKg.toString()} onValueChange={(v) => updateInput('countPerKg', parseInt(v))}>
+                  <Label>Feed Leftover</Label>
+                  <Select value={inputs.feedLeftover} onValueChange={(v) => updateInput('feedLeftover', v as any)}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="200">200+</SelectItem>
-                      <SelectItem value="175">150-200</SelectItem>
-                      <SelectItem value="125">100-150</SelectItem>
-                      <SelectItem value="90">80-100</SelectItem>
-                      <SelectItem value="70">60-80</SelectItem>
-                      <SelectItem value="55">50-60</SelectItem>
-                      <SelectItem value="45">40-50</SelectItem>
-                      <SelectItem value="35">30-40</SelectItem>
-                      <SelectItem value="25">20-30</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : (
-                <div>
-                  <Label>ABW (grams)</Label>
-                  <Input 
-                    type="number" 
-                    value={inputs.abwGrams}
-                    onChange={(e) => updateInput('abwGrams', parseFloat(e.target.value) || 0)}
-                    min="0.1"
-                    max="30"
-                    step="0.1"
-                  />
-                </div>
-              )}
-
-              <div className="text-sm text-muted-foreground p-2 bg-secondary/20 rounded">
-                {inputs.usingSizeType === 'count' 
-                  ? `ABW: ${inputs.abwGrams.toFixed(2)} g`
-                  : `COUNT: ${inputs.countPerKg.toFixed(0)} per kg`
-                }
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Check Tray Assessment */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Info className="h-5 w-5" />
-                Check Tray Assessment
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Number of Trays</Label>
-                  <Select value={inputs.numberOfTrays.toString()} onValueChange={(v) => updateInput('numberOfTrays', parseInt(v))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="2">2</SelectItem>
-                      <SelectItem value="3">3</SelectItem>
-                      <SelectItem value="4">4</SelectItem>
-                      <SelectItem value="5">5</SelectItem>
-                      <SelectItem value="6">6</SelectItem>
+                      <SelectItem value="finished">All finished/very little</SelectItem>
+                      <SelectItem value="some">Some left</SelectItem>
+                      <SelectItem value="alot">A lot left</SelectItem>
+                      <SelectItem value="waste">Too much waste</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
-                <div>
-                  <Label>Coverage</Label>
-                  <Select value={inputs.coverage} onValueChange={(v) => updateInput('coverage', v as any)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="good">≥75% (Good)</SelectItem>
-                      <SelectItem value="poor">&lt;75% (Add trays)</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Shrimp on Trays</Label>
+                    <Select value={inputs.shrimpOnTrays} onValueChange={(v) => updateInput('shrimpOnTrays', v as any)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="many">Many</SelectItem>
+                        <SelectItem value="normal">Normal</SelectItem>
+                        <SelectItem value="few">Few/None</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label>Gut Color</Label>
+                    <Select value={inputs.gutColor} onValueChange={(v) => updateInput('gutColor', v as any)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="full">Brown/black (full)</SelectItem>
+                        <SelectItem value="light">Light/empty</SelectItem>
+                        <SelectItem value="red">Reddish</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <Label>Feed Leftover</Label>
-                <Select value={inputs.feedLeftover} onValueChange={(v) => updateInput('feedLeftover', v as any)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="finished">All finished/very little</SelectItem>
-                    <SelectItem value="some">Some left</SelectItem>
-                    <SelectItem value="alot">A lot left</SelectItem>
-                    <SelectItem value="waste">Too much waste</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <Separator />
 
-              <div className="grid grid-cols-2 gap-4">
+              {/* Environmental Conditions */}
+              <div className="space-y-4">
+                <h4 className="font-semibold flex items-center gap-2">
+                  <Thermometer className="h-4 w-4" />
+                  Environmental Conditions
+                </h4>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Temperature (°C)</Label>
+                    <Input 
+                      type="number" 
+                      value={inputs.temperature}
+                      onChange={(e) => updateInput('temperature', parseFloat(e.target.value) || 0)}
+                      min="20"
+                      max="36"
+                    />
+                  </div>
+
+                  <div>
+                    <Label>Weather</Label>
+                    <Select value={inputs.weather} onValueChange={(v) => updateInput('weather', v as any)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="clear">Clear</SelectItem>
+                        <SelectItem value="light_rain">Light rain</SelectItem>
+                        <SelectItem value="heavy_rain">Heavy rain/storm</SelectItem>
+                        <SelectItem value="cloudy">Many cloudy days</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Water Color</Label>
+                    <Select value={inputs.waterColor} onValueChange={(v) => updateInput('waterColor', v as any)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="normal">Normal light green</SelectItem>
+                        <SelectItem value="thick_bloom">Very green/thick bloom</SelectItem>
+                        <SelectItem value="muddy">Muddy</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label>DO Status at Dawn</Label>
+                    <Select value={inputs.doStatus} onValueChange={(v) => updateInput('doStatus', v as any)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="good">Good (&gt;4)</SelectItem>
+                        <SelectItem value="low">Low (3-4)</SelectItem>
+                        <SelectItem value="critical">Critical (&lt;3)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
                 <div>
-                  <Label>Shrimp on Trays</Label>
-                  <Select value={inputs.shrimpOnTrays} onValueChange={(v) => updateInput('shrimpOnTrays', v as any)}>
+                  <Label>Pond Actions</Label>
+                  <Select value={inputs.pondActions} onValueChange={(v) => updateInput('pondActions', v as any)}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="many">Many</SelectItem>
-                      <SelectItem value="normal">Normal</SelectItem>
-                      <SelectItem value="few">Few/None</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
+                      <SelectItem value="water_exchange">Water exchange</SelectItem>
+                      <SelectItem value="chemicals">Chemicals/medicine used</SelectItem>
+                      <SelectItem value="molting">Molting observed</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-
-                <div>
-                  <Label>Gut Color</Label>
-                  <Select value={inputs.gutColor} onValueChange={(v) => updateInput('gutColor', v as any)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="full">Brown/black (full)</SelectItem>
-                      <SelectItem value="light">Light/empty</SelectItem>
-                      <SelectItem value="red">Reddish</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Environmental Conditions */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Thermometer className="h-5 w-5" />
-                Environmental Conditions
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Temperature (°C)</Label>
-                  <Input 
-                    type="number" 
-                    value={inputs.temperature}
-                    onChange={(e) => updateInput('temperature', parseFloat(e.target.value) || 0)}
-                    min="20"
-                    max="36"
-                  />
-                </div>
-
-                <div>
-                  <Label>Weather</Label>
-                  <Select value={inputs.weather} onValueChange={(v) => updateInput('weather', v as any)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="clear">Clear</SelectItem>
-                      <SelectItem value="light_rain">Light rain</SelectItem>
-                      <SelectItem value="heavy_rain">Heavy rain/storm</SelectItem>
-                      <SelectItem value="cloudy">Many cloudy days</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Water Color</Label>
-                  <Select value={inputs.waterColor} onValueChange={(v) => updateInput('waterColor', v as any)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="normal">Normal light green</SelectItem>
-                      <SelectItem value="thick_bloom">Very green/thick bloom</SelectItem>
-                      <SelectItem value="muddy">Muddy</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label>DO Status at Dawn</Label>
-                  <Select value={inputs.doStatus} onValueChange={(v) => updateInput('doStatus', v as any)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="good">Good (&gt;4)</SelectItem>
-                      <SelectItem value="low">Low (3-4)</SelectItem>
-                      <SelectItem value="critical">Critical (&lt;3)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div>
-                <Label>Pond Actions</Label>
-                <Select value={inputs.pondActions} onValueChange={(v) => updateInput('pondActions', v as any)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    <SelectItem value="water_exchange">Water exchange</SelectItem>
-                    <SelectItem value="chemicals">Chemicals/medicine used</SelectItem>
-                    <SelectItem value="molting">Molting observed</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
             </CardContent>
           </Card>
@@ -601,8 +560,8 @@ const ShrimpAquacultureCalculator = () => {
                   <div className="text-xs text-muted-foreground">Biomass</div>
                 </div>
                 <div>
-                  <div className="text-lg font-semibold">{calculations.mealsPerDay}</div>
-                  <div className="text-xs text-muted-foreground">Meals/Day</div>
+                  <div className="text-lg font-semibold">{inputs.countPerKg}</div>
+                  <div className="text-xs text-muted-foreground">COUNT/KG</div>
                 </div>
               </div>
 
@@ -629,33 +588,6 @@ const ShrimpAquacultureCalculator = () => {
             </CardContent>
           </Card>
 
-          {/* Daily Meal Schedule */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="h-5 w-5" />
-                Daily Meal Schedule
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {calculations.mealSchedule.map((meal, index) => (
-                  <div key={index} className="flex justify-between items-center p-3 bg-secondary/20 rounded-lg">
-                    <span className="font-medium">{meal.time}</span>
-                    <span className="text-lg font-bold text-primary">
-                      {meal.amount.toFixed(2)} kg
-                    </span>
-                  </div>
-                ))}
-              </div>
-              
-              <div className="mt-4 p-3 bg-primary/10 rounded-lg">
-                <div className="text-sm text-center">
-                  <strong>Night feeding:</strong> {((calculations.mealSchedule.slice(-2).reduce((sum, meal) => sum + meal.amount, 0) / calculations.finalDailyFeedKg) * 100).toFixed(0)}% of daily feed
-                </div>
-              </div>
-            </CardContent>
-          </Card>
 
           {/* Check Tray Recommendations */}
           <Card>
