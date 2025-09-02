@@ -65,6 +65,68 @@ const ShrimpAquacultureCalculator = () => {
     }));
   };
 
+  // Feeding rate table based on DOC and shrimp size
+  const feedingTable = {
+    '1-7': { 0.5: 10, 1: 10, 2: 10, 3: 10, 4: 8, 5: 7, 6: 6, 8: 5, 10: 5, 12: 4, 16: 3, 20: 3, 25: 3 },
+    '8-14': { 0.5: 10, 1: 10, 2: 10, 3: 10, 4: 8, 5: 7, 6: 6, 8: 5, 10: 5, 12: 4, 16: 3, 20: 3, 25: 3 },
+    '15-21': { 0.5: 10, 1: 10, 2: 9, 3: 8, 4: 7, 5: 6, 6: 5, 8: 4, 10: 4, 12: 3, 16: 2, 20: 2, 25: 2 },
+    '22-28': { 0.5: 9, 1: 8, 2: 7, 3: 6, 4: 5, 5: 4.5, 6: 4, 8: 3.5, 10: 3, 12: 2.5, 16: 2, 20: 1.5, 25: 1.5 },
+    '29-35': { 0.5: 8, 1: 7, 2: 6, 3: 5, 4: 4.5, 5: 4, 6: 3.5, 8: 3, 10: 2.5, 12: 2, 16: 1.5, 20: 1.5, 25: 1.5 },
+    '36-42': { 0.5: 7, 1: 6, 2: 5.5, 3: 4.5, 4: 4, 5: 3.5, 6: 3, 8: 2.5, 10: 2, 12: 1.5, 16: 1.5, 20: 1.5, 25: 1 },
+    '43-49': { 0.5: 6, 1: 5.5, 2: 5, 3: 4, 4: 3.5, 5: 3, 6: 2.5, 8: 2, 10: 1.5, 12: 1.5, 16: 1, 20: 1, 25: 1 },
+    '50-56': { 0.5: 5.5, 1: 5, 2: 4.5, 3: 3.5, 4: 3, 5: 2.5, 6: 2, 8: 1.5, 10: 1.5, 12: 1, 16: 1, 20: 1, 25: 1 },
+    '57-63': { 0.5: 5, 1: 4.5, 2: 4, 3: 3, 4: 2.5, 5: 2, 6: 1.8, 8: 1.5, 10: 1.2, 12: 1, 16: 1, 20: 0.8, 25: 0.8 },
+    '64-70': { 0.5: 4.5, 1: 4, 2: 3.5, 3: 2.7, 4: 2.2, 5: 1.8, 6: 1.5, 8: 1.2, 10: 1, 12: 0.9, 16: 0.8, 20: 0.7, 25: 0.7 },
+    '71-77': { 0.5: 4, 1: 3.5, 2: 3, 3: 2.5, 4: 2, 5: 1.6, 6: 1.4, 8: 1.1, 10: 0.9, 12: 0.8, 16: 0.7, 20: 0.6, 25: 0.6 },
+    '78-84': { 0.5: 3.5, 1: 3, 2: 2.6, 3: 2.2, 4: 1.8, 5: 1.4, 6: 1.2, 8: 1, 10: 0.8, 12: 0.7, 16: 0.6, 20: 0.5, 25: 0.5 },
+    '85-91': { 0.5: 3.5, 1: 3, 2: 2.5, 3: 2, 4: 1.6, 5: 1.4, 6: 1.2, 8: 1, 10: 0.8, 12: 0.7, 16: 0.6, 20: 0.5, 25: 0.5 },
+    '92-98': { 0.5: 3.5, 1: 3, 2: 2.4, 3: 2, 4: 1.6, 5: 1.4, 6: 1.2, 8: 1, 10: 0.8, 12: 0.7, 16: 0.6, 20: 0.5, 25: 0.5 },
+    '99-105': { 0.5: 3.5, 1: 3, 2: 2.4, 3: 2, 4: 1.6, 5: 1.4, 6: 1.2, 8: 1, 10: 0.8, 12: 0.7, 16: 0.6, 20: 0.5, 25: 0.5 },
+    '106-112': { 0.5: 3.5, 1: 3, 2: 2.4, 3: 2, 4: 1.6, 5: 1.4, 6: 1.2, 8: 1, 10: 0.8, 12: 0.7, 16: 0.6, 20: 0.5, 25: 0.5 },
+    '113-120': { 0.5: 3.5, 1: 3, 2: 2.4, 3: 2, 4: 1.6, 5: 1.4, 6: 1.2, 8: 1, 10: 0.8, 12: 0.7, 16: 0.6, 20: 0.5, 25: 0.5 }
+  };
+
+  // Get DOC range key
+  const getDOCRange = (doc: number) => {
+    if (doc <= 7) return '1-7';
+    if (doc <= 14) return '8-14';
+    if (doc <= 21) return '15-21';
+    if (doc <= 28) return '22-28';
+    if (doc <= 35) return '29-35';
+    if (doc <= 42) return '36-42';
+    if (doc <= 49) return '43-49';
+    if (doc <= 56) return '50-56';
+    if (doc <= 63) return '57-63';
+    if (doc <= 70) return '64-70';
+    if (doc <= 77) return '71-77';
+    if (doc <= 84) return '78-84';
+    if (doc <= 91) return '85-91';
+    if (doc <= 98) return '92-98';
+    if (doc <= 105) return '99-105';
+    if (doc <= 112) return '106-112';
+    return '113-120';
+  };
+
+  // Auto-select feeding rate based on DOC and shrimp size
+  React.useEffect(() => {
+    const docRange = getDOCRange(inputs.docDays);
+    const shrimpWeight = inputs.abwGrams;
+    const feedRates = feedingTable[docRange as keyof typeof feedingTable];
+    
+    // Find closest weight match
+    const weights = Object.keys(feedRates).map(Number).sort((a, b) => a - b);
+    let closestWeight = weights[0];
+    
+    for (const weight of weights) {
+      if (Math.abs(weight - shrimpWeight) < Math.abs(closestWeight - shrimpWeight)) {
+        closestWeight = weight;
+      }
+    }
+    
+    const autoFeedingRate = feedRates[closestWeight as keyof typeof feedRates];
+    updateInput('feedingRate', autoFeedingRate);
+  }, [inputs.docDays, inputs.abwGrams]);
+
   // Convert between COUNT and ABW
   React.useEffect(() => {
     if (inputs.usingSizeType === 'count') {
@@ -235,13 +297,38 @@ const ShrimpAquacultureCalculator = () => {
                   
                   <div>
                     <Label>DOC (Days)</Label>
-                    <Input 
-                      type="number" 
-                      value={inputs.docDays}
-                      onChange={(e) => updateInput('docDays', parseInt(e.target.value) || 0)}
-                      min="1"
-                      max="150"
-                    />
+                    <Select value={getDOCRange(inputs.docDays)} onValueChange={(v) => {
+                      const ranges: {[key: string]: number} = {
+                        '1-7': 4, '8-14': 11, '15-21': 18, '22-28': 25, '29-35': 32,
+                        '36-42': 39, '43-49': 46, '50-56': 53, '57-63': 60, '64-70': 67,
+                        '71-77': 74, '78-84': 81, '85-91': 88, '92-98': 95, '99-105': 102,
+                        '106-112': 109, '113-120': 116
+                      };
+                      updateInput('docDays', ranges[v]);
+                    }}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1-7">1-7 Days</SelectItem>
+                        <SelectItem value="8-14">8-14 Days</SelectItem>
+                        <SelectItem value="15-21">15-21 Days</SelectItem>
+                        <SelectItem value="22-28">22-28 Days</SelectItem>
+                        <SelectItem value="29-35">29-35 Days</SelectItem>
+                        <SelectItem value="36-42">36-42 Days</SelectItem>
+                        <SelectItem value="43-49">43-49 Days</SelectItem>
+                        <SelectItem value="50-56">50-56 Days</SelectItem>
+                        <SelectItem value="57-63">57-63 Days</SelectItem>
+                        <SelectItem value="64-70">64-70 Days</SelectItem>
+                        <SelectItem value="71-77">71-77 Days</SelectItem>
+                        <SelectItem value="78-84">78-84 Days</SelectItem>
+                        <SelectItem value="85-91">85-91 Days</SelectItem>
+                        <SelectItem value="92-98">92-98 Days</SelectItem>
+                        <SelectItem value="99-105">99-105 Days</SelectItem>
+                        <SelectItem value="106-112">106-112 Days</SelectItem>
+                        <SelectItem value="113-120">113-120 Days</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
@@ -274,15 +361,13 @@ const ShrimpAquacultureCalculator = () => {
                   </div>
                   
                   <div>
-                    <Label>Feeding Rate (%)</Label>
-                    <Input 
-                      type="number" 
-                      value={inputs.feedingRate}
-                      onChange={(e) => updateInput('feedingRate', parseFloat(e.target.value) || 0)}
-                      min="2"
-                      max="10"
-                      step="0.1"
-                    />
+                    <Label>Feeding Rate (% - Auto Selected)</Label>
+                    <div className="p-2 bg-primary/10 rounded border text-center font-semibold text-primary">
+                      {inputs.feedingRate}%
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Auto-selected based on DOC range and shrimp size
+                    </div>
                   </div>
                 </div>
               </div>
