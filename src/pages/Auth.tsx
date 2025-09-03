@@ -1,16 +1,17 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useToast } from "@/hooks/use-toast";
+import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from "@/components/ui/input-otp";
+import { Code } from "lucide-react";
 import { useAuth } from "@/state/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { cleanupAuthState } from "@/lib/authCleanup";
-import { Mail, Phone, Eye, EyeOff, Loader2, LogIn, ChevronRight } from "lucide-react";
-import { useNavigate, Link } from "react-router-dom";
+import { toast } from "sonner";
+import { useEffect } from "react";
+
 const useSEO = (title: string, description: string) => {
   useEffect(() => {
     document.title = title;
@@ -27,309 +28,278 @@ const useSEO = (title: string, description: string) => {
 };
 
 const Auth = () => {
-  useSEO("Aqua Management | Sign in", "Secure login for Aqua Management aquaculture system.");
-  const { toast } = useToast();
-  const { signInDev, isDevLoginEnabled, signInLocal } = useAuth();
+  useSEO("Sign In", "Sign in to your AquaLedger account");
+  
   const navigate = useNavigate();
-
-  // Login modes
-  const [loginType, setLoginType] = useState<"credentials" | "username">("credentials");
-  const [mode, setMode] = useState<"email" | "mobile">("email");
-  const [identifier, setIdentifier] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  const { signInLocal, signInDev, isDevLoginEnabled } = useAuth();
+  const [phone, setPhone] = useState("");
+  const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showForgotPassword, setShowForgotPassword] = useState(false);
-
-  // Username login (for team members)
-  const [username, setUsername] = useState("");
-  const [userPassword, setUserPassword] = useState("");
-
-  const googleLogin = async () => {
-    try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: { redirectTo: `${window.location.origin}/` },
-      });
-      if (error) throw error;
-      if (data?.url) window.location.href = data.url;
-    } catch (e: any) {
-      toast({ title: "Google login failed", description: e.message });
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpLoading, setOtpLoading] = useState(false);
+  
+  const sendOtp = async () => {
+    if (!phone.trim()) {
+      toast.error("Please enter your phone number");
+      return;
     }
-  };
 
-  const emailOrPhoneLogin = async () => {
-    setLoading(true);
     try {
-      const value = identifier.trim();
-      if (!value || !password) throw new Error("Enter credentials");
-
-      // Clean any stale auth before signing in
-      cleanupAuthState();
-      try { await supabase.auth.signOut({ scope: "global" } as any); } catch {}
-
-      if (mode === "email") {
-        if (/@/.test(value)) {
-          const { error } = await supabase.auth.signInWithPassword({ email: value, password });
-          if (error) throw error;
-        } else {
-          // Treat as username handle
-          const aliasEmail = `${value.toLowerCase()}@users.aqualedger.local`;
-          const { error } = await supabase.auth.signInWithPassword({ email: aliasEmail, password });
-          if (error) throw error;
+      setOtpLoading(true);
+      const { error } = await supabase.auth.signInWithOtp({
+        phone: `+91${phone}`,
+        options: {
+          channel: 'sms',
         }
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({ phone: value as any, password } as any);
-        if (error) throw error;
-      }
+      });
 
-      // Hard refresh to ensure clean state
-      window.location.href = "/";
-    } catch (e: any) {
-      toast({ title: "Login failed", description: e.message });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const usernameLogin = async () => {
-    setLoading(true);
-    try {
-      const u = username.trim();
-      if (!u || !userPassword) {
-        toast({ title: "Missing fields", description: "Enter username and password" });
+      if (error) {
+        console.error('OTP send error:', error);
+        toast.error(error.message || "Failed to send OTP");
         return;
       }
-      
-      const res = await signInLocal(u, userPassword);
-      if (res.ok) {
-        toast({ title: "Signed in", description: `Welcome ${u}` });
-        setUsername("");
-        setUserPassword("");
-        window.location.href = "/";
-      } else {
-        toast({ title: "Login failed", description: res.message || "Invalid credentials" });
+
+      setOtpSent(true);
+      toast.success("OTP sent to your phone number");
+    } catch (error: any) {
+      console.error('OTP send error:', error);
+      toast.error("Failed to send OTP");
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const verifyOtp = async () => {
+    if (!otp.trim()) {
+      toast.error("Please enter the OTP");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const { error } = await supabase.auth.verifyOtp({
+        phone: `+91${phone}`,
+        token: otp,
+        type: 'sms'
+      });
+
+      if (error) {
+        console.error('OTP verification error:', error);
+        toast.error(error.message || "Invalid OTP");
+        return;
       }
-    } catch (e: any) {
-      toast({ title: "Login failed", description: e.message });
+
+      toast.success("Successfully signed in!");
+      navigate("/");
+    } catch (error: any) {
+      console.error('OTP verification error:', error);
+      toast.error("Failed to verify OTP");
     } finally {
       setLoading(false);
     }
   };
-
-  const forgotPassword = async () => {
-    const value = identifier.trim();
-    if (!/@/.test(value)) { toast({ title: "Enter email", description: "Please enter your email to reset password." }); return; }
+  
+  const googleLogin = async () => {
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(value, { redirectTo: `${window.location.origin}/auth` });
-      if (error) throw error;
-      toast({ title: "Reset link sent", description: "Check your email for reset instructions." });
-    } catch (e: any) {
-      toast({ title: "Unable to send reset", description: e.message });
-    }
-  };
-
-  const signUp = async () => {
-    if (mode !== "email") { toast({ title: "Use email to create account", description: "Sign up currently supports email only." }); return; }
-    const email = identifier.trim();
-    if (!email || !password) { toast({ title: "Missing fields", description: "Enter email and password" }); return; }
-    const redirectUrl = `${window.location.origin}/`;
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { emailRedirectTo: redirectUrl }
-    });
-    if (error) {
-      toast({ title: "Sign up failed", description: error.message });
-    } else {
-      toast({ title: "Check your email", description: "Confirm your address to finish signing up." });
+      setLoading(true);
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/`
+        }
+      });
+      if (error) {
+        console.error('Google login error:', error);
+        toast.error(error.message);
+      }
+    } catch (error: any) {
+      console.error('Google login error:', error);
+      toast.error('Failed to sign in with Google');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-4">
-      <main className="w-full max-w-md space-y-6">
-        <div className="text-center space-y-1">
-          <h1 className="text-4xl font-extrabold tracking-tight text-primary">Aqua Management</h1>
-          <p className="text-muted-foreground">Professional aquaculture management system</p>
-        </div>
-
-        <Card>
-          <CardContent className="pt-6 space-y-4">
-            <Tabs value={loginType} onValueChange={(v) => setLoginType(v as "credentials" | "username")}>
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="credentials">Email/Mobile</TabsTrigger>
-                <TabsTrigger value="username">Username</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="credentials" className="space-y-4">
-                <Tabs value={mode} onValueChange={(v) => setMode(v as "email" | "mobile")}>
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="email" className="flex items-center gap-2">
-                      <Mail className="h-4 w-4" /> Email
-                    </TabsTrigger>
-                    <TabsTrigger value="mobile" className="flex items-center gap-2">
-                      <Phone className="h-4 w-4" /> Mobile
-                    </TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="email" className="space-y-3">
-                    <div className="grid gap-2">
-                      <Label>Email address</Label>
-                      <Input
-                        type="email"
-                        placeholder="you@example.com"
-                        value={identifier}
-                        onChange={(e) => setIdentifier(e.target.value)}
-                      />
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="mobile" className="space-y-3">
-                    <div className="grid gap-2">
-                      <Label>Mobile number</Label>
-                      <Input
-                        type="tel"
-                        inputMode="tel"
-                        placeholder="e.g. +15551234567"
-                        value={identifier}
-                        onChange={(e) => setIdentifier(e.target.value)}
-                      />
-                    </div>
-                  </TabsContent>
-                </Tabs>
-
-                <div className="grid gap-2">
-                  <div className="flex items-center justify-between">
-                    <Label>Password</Label>
-                    <button
-                      type="button"
-                      className="text-xs text-primary hover:underline"
-                      onClick={() => setShowForgotPassword(!showForgotPassword)}
-                    >
-                      Forgot password?
-                    </button>
-                  </div>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-secondary/10 p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center space-y-4">
+          <div className="text-4xl font-bold text-primary">AquaLedger</div>
+          <div>
+            <CardTitle className="text-2xl font-semibold">Welcome Back</CardTitle>
+            <CardDescription>
+              Aqua account management system
+            </CardDescription>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {!otpSent ? (
+            <>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="phone">Phone Number</Label>
                   <div className="relative">
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 flex items-center space-x-2">
+                      <span className="text-2xl">🇮🇳</span>
+                      <span className="text-sm text-muted-foreground">+91</span>
+                    </div>
                     <Input
-                      type={showPassword ? "text" : "password"}
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && emailOrPhoneLogin()}
+                      id="phone"
+                      type="tel"
+                      placeholder="Enter your phone number"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      className="pl-20"
+                      onKeyPress={(e) => e.key === 'Enter' && sendOtp()}
                     />
-                    <button
-                      type="button"
-                      className="absolute inset-y-0 right-2 flex items-center px-2 text-muted-foreground"
-                      onClick={() => setShowPassword((s) => !s)}
-                      aria-label={showPassword ? "Hide password" : "Show password"}
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
                   </div>
                 </div>
+              </div>
 
-                {showForgotPassword && (
-                  <div className="p-3 bg-muted rounded-lg space-y-2">
-                    <p className="text-sm text-muted-foreground">
-                      Enter your email address to receive a password reset link.
-                    </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={forgotPassword}
-                      disabled={!identifier.includes('@')}
-                    >
-                      Send reset link
-                    </Button>
-                  </div>
-                )}
-
-                <Button className="w-full" onClick={emailOrPhoneLogin} disabled={loading}>
-                  {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <LogIn className="h-4 w-4 mr-2" />}
-                  {mode === "email" ? "Sign in with Email" : "Sign in with Mobile"}
-                </Button>
-              </TabsContent>
-
-              <TabsContent value="username" className="space-y-4">
-                <div className="grid gap-2">
-                  <Label>Username</Label>
-                  <Input
-                    type="text"
-                    placeholder="Enter your username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                  />
-                </div>
-
-                <div className="grid gap-2">
-                  <Label>Password</Label>
-                  <div className="relative">
-                    <Input
-                      type={showPassword ? "text" : "password"}
-                      placeholder="••••••••"
-                      value={userPassword}
-                      onChange={(e) => setUserPassword(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && usernameLogin()}
-                    />
-                    <button
-                      type="button"
-                      className="absolute inset-y-0 right-2 flex items-center px-2 text-muted-foreground"
-                      onClick={() => setShowPassword((s) => !s)}
-                      aria-label={showPassword ? "Hide password" : "Show password"}
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                <Button className="w-full" onClick={usernameLogin} disabled={loading}>
-                  {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <LogIn className="h-4 w-4 mr-2" />}
-                  Sign in with Username
-                </Button>
-
-                <p className="text-xs text-muted-foreground text-center">
-                  Username accounts are created by the system administrator.
-                </p>
-              </TabsContent>
-            </Tabs>
-
-            <div className="text-center">
-              <button
-                type="button"
-                className="text-sm font-medium text-primary hover:underline inline-flex items-center gap-1"
-                onClick={() => navigate("/signup")}
+              <Button 
+                onClick={sendOtp} 
+                disabled={otpLoading || !phone.trim()}
+                className="w-full bg-orange-500 hover:bg-orange-600 text-white"
               >
-                Create a new account <ChevronRight className="h-4 w-4" />
-              </button>
+                {otpLoading ? "Sending OTP..." : "Get OTP"}
+              </Button>
+            </>
+          ) : (
+            <>
+              <div className="space-y-4">
+                <div className="text-center">
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Enter the 6-digit OTP sent to +91{phone}
+                  </p>
+                  <InputOTP 
+                    maxLength={6} 
+                    value={otp} 
+                    onChange={setOtp}
+                    onComplete={(value) => {
+                      setOtp(value);
+                      setTimeout(() => verifyOtp(), 100);
+                    }}
+                  >
+                    <InputOTPGroup>
+                      <InputOTPSlot index={0} />
+                      <InputOTPSlot index={1} />
+                      <InputOTPSlot index={2} />
+                    </InputOTPGroup>
+                    <InputOTPSeparator />
+                    <InputOTPGroup>
+                      <InputOTPSlot index={3} />
+                      <InputOTPSlot index={4} />
+                      <InputOTPSlot index={5} />
+                    </InputOTPGroup>
+                  </InputOTP>
+                </div>
+
+                <div className="flex justify-between items-center text-sm">
+                  <Button
+                    variant="link"
+                    className="px-0 text-sm"
+                    onClick={() => {
+                      setOtpSent(false);
+                      setOtp("");
+                    }}
+                  >
+                    Change Number
+                  </Button>
+                  <Button
+                    variant="link"
+                    className="px-0 text-sm"
+                    onClick={sendOtp}
+                    disabled={otpLoading}
+                  >
+                    {otpLoading ? "Resending..." : "Resend OTP"}
+                  </Button>
+                </div>
+              </div>
+
+              <Button 
+                onClick={verifyOtp} 
+                disabled={loading || otp.length !== 6}
+                className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+              >
+                {loading ? "Verifying..." : "Verify OTP"}
+              </Button>
+            </>
+          )}
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <Separator className="w-full" />
             </div>
-
-            <div className="flex items-center gap-4">
-              <Separator className="flex-1" />
-              <span className="text-xs text-muted-foreground">Or continue with</span>
-              <Separator className="flex-1" />
-            </div>
-
-            <Button variant="outline" className="w-full" onClick={googleLogin}>
-              Continue with Google
-            </Button>
-          </CardContent>
-        </Card>
-
-        {isDevLoginEnabled && (
-          <div className="text-center">
-            <div className="inline-flex gap-2">
-              <Button size="sm" onClick={() => signInDev("owner")}>Owner</Button>
-              <Button size="sm" variant="secondary" onClick={() => signInDev("manager")}>Manager</Button>
-              <Button size="sm" variant="secondary" onClick={() => signInDev("partner")}>Partner</Button>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
             </div>
           </div>
-        )}
 
-        <p className="text-xs text-muted-foreground text-center">
-          By signing in, you agree to the Terms and Privacy Policy.
-        </p>
-      </main>
+          <div className="grid grid-cols-2 gap-3">
+            <Button 
+              variant="outline" 
+              onClick={googleLogin} 
+              disabled={loading}
+              className="w-full"
+            >
+              <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
+                <path
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                  fill="#4285F4"
+                />
+                <path
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                  fill="#34A853"
+                />
+                <path
+                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                  fill="#FBBC05"
+                />
+                <path
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                  fill="#EA4335"
+                />
+              </svg>
+              Google
+            </Button>
+
+            <Button 
+              variant="outline" 
+              disabled={loading}
+              className="w-full"
+            >
+              <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24" fill="#1877F2">
+                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+              </svg>
+              Facebook
+            </Button>
+          </div>
+            
+          {isDevLoginEnabled && (
+            <Button 
+              variant="outline" 
+              onClick={() => signInDev()}
+              className="w-full"
+            >
+              <Code className="mr-2 h-4 w-4" />
+              Dev Login
+            </Button>
+          )}
+
+          <div className="text-center">
+            <span className="text-sm text-muted-foreground">
+              Don't have an account?{" "}
+            </span>
+            <Button
+              variant="link"
+              className="text-sm p-0 h-auto font-medium"
+              onClick={() => navigate("/signup")}
+            >
+              Sign up
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
