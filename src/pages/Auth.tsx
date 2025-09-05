@@ -46,21 +46,50 @@ const Auth = () => {
 
     try {
       setOtpLoading(true);
-      const { error } = await supabase.auth.signInWithOtp({
-        phone: `+91${phone}`,
-        options: {
-          channel: 'sms',
+      const phoneNumber = `+91${phone}`;
+      
+      // Check if this phone number exists as a team member username
+      const { data: usernameExists } = await supabase
+        .from("usernames")
+        .select("username")
+        .eq("username", phoneNumber)
+        .maybeSingle();
+
+      if (usernameExists) {
+        // This is a team member, send OTP to existing user
+        const { error } = await supabase.auth.signInWithOtp({
+          phone: phoneNumber,
+          options: {
+            channel: 'sms',
+          }
+        });
+
+        if (error) {
+          console.error('OTP send error:', error);
+          toast.error(error.message || "Failed to send OTP");
+          return;
         }
-      });
 
-      if (error) {
-        console.error('OTP send error:', error);
-        toast.error(error.message || "Failed to send OTP");
-        return;
+        setOtpSent(true);
+        toast.success("OTP sent to your phone number");
+      } else {
+        // New user - will create owner account after OTP verification
+        const { error } = await supabase.auth.signInWithOtp({
+          phone: phoneNumber,
+          options: {
+            channel: 'sms',
+          }
+        });
+
+        if (error) {
+          console.error('OTP send error:', error);
+          toast.error(error.message || "Failed to send OTP");
+          return;
+        }
+
+        setOtpSent(true);
+        toast.success("OTP sent to your phone number");
       }
-
-      setOtpSent(true);
-      toast.success("OTP sent to your phone number");
     } catch (error: any) {
       console.error('OTP send error:', error);
       toast.error("Failed to send OTP");
@@ -127,9 +156,9 @@ const Auth = () => {
           <div className="text-4xl font-bold text-primary">AquaLedger</div>
           <div>
             <CardTitle className="text-2xl font-semibold">Welcome Back</CardTitle>
-            <CardDescription>
-              Aqua account management system
-            </CardDescription>
+                    <CardDescription>
+                      Sign in with phone number (owners and team members)
+                    </CardDescription>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -288,14 +317,14 @@ const Auth = () => {
 
           <div className="text-center">
             <span className="text-sm text-muted-foreground">
-              Don't have an account?{" "}
+              New owner?{" "}
             </span>
             <Button
               variant="link"
               className="text-sm p-0 h-auto font-medium"
               onClick={() => navigate("/signup")}
             >
-              Sign up
+              Create account
             </Button>
           </div>
         </CardContent>

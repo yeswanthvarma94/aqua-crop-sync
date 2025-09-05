@@ -9,9 +9,10 @@ const corsHeaders = {
 
 interface CreateUserReq {
   accountId: string;
-  username: string; // simple handle, lowercase letters/numbers/_
+  username: string; // Phone number
   password: string;
   role: "manager" | "partner";
+  name: string; // Full name of the user
 }
 
 serve(async (req) => {
@@ -19,16 +20,23 @@ serve(async (req) => {
 
   try {
     const body: CreateUserReq = await req.json();
-    const { accountId, username, password, role } = body || {} as any;
+    const { accountId, username, password, role, name } = body || {} as any;
 
-    if (!accountId || !username || !password || !role) {
+    if (!accountId || !username || !password || !role || !name) {
       return new Response(JSON.stringify({ error: "Missing fields" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
-    const uname = String(username).trim().toLowerCase();
-    if (!/^([a-z0-9_]{3,30})$/.test(uname)) {
-      return new Response(JSON.stringify({ error: "Invalid username format" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
+    // Validate phone number format for username
+    const phoneNumber = String(username).trim();
+    if (!/^[+]?[1-9]\d{7,14}$/.test(phoneNumber.replace(/[\s\-]/g, ''))) {
+      return new Response(JSON.stringify({ error: "Username must be a valid phone number" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
+    
+    // Validate name
+    if (!name || String(name).trim().length < 2) {
+      return new Response(JSON.stringify({ error: "Name must be at least 2 characters" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
+    }
+    
     if (!["manager", "partner"].includes(role)) {
       return new Response(JSON.stringify({ error: "Role must be manager or partner" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
@@ -56,14 +64,14 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Only owner can add team members" }), { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
-    // Enforce unique username
+    // Enforce unique username (phone number)
     const { data: existing } = await userClient
       .from("usernames")
       .select("username")
-      .eq("username", uname)
+      .eq("username", phoneNumber)
       .maybeSingle();
     if (existing) {
-      return new Response(JSON.stringify({ error: "Username already taken" }), { status: 409, headers: { "Content-Type": "application/json", ...corsHeaders } });
+      return new Response(JSON.stringify({ error: "Phone number already registered" }), { status: 409, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
     // Check current member count (trigger also enforces)
@@ -78,18 +86,30 @@ serve(async (req) => {
     // Service client for admin auth operations
     const adminClient = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
-    const emailAlias = `${uname}@users.aqualedger.local`;
+    // Create user with phone number
     const { data: created, error: createErr } = await adminClient.auth.admin.createUser({
-      email: emailAlias,
+      phone: phoneNumber,
       password,
-      email_confirm: true,
-      user_metadata: { username: uname },
+      phone_confirm: true,
+      user_metadata: { username: phoneNumber, name: String(name).trim() },
     });
     if (createErr || !created.user) {
       return new Response(JSON.stringify({ error: createErr?.message || "Failed to create auth user" }), { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
     const newUserId = created.user.id;
+
+    // Insert profile with name
+    const { error: profileErr } = await adminClient
+      .from("profiles")
+      .insert({ 
+        user_id: newUserId, 
+        name: String(name).trim(), 
+        phone: phoneNumber 
+      });
+    if (profileErr) {
+      return new Response(JSON.stringify({ error: "Failed to create user profile" }), { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } });
+    }
 
     // Insert membership (RLS ensures only owner can insert)
     const { error: memErr } = await userClient
@@ -102,12 +122,12 @@ serve(async (req) => {
     // Save username mapping
     const { error: mapErr } = await userClient
       .from("usernames")
-      .insert({ user_id: newUserId, account_id: accountId, username: uname });
+      .insert({ user_id: newUserId, account_id: accountId, username: phoneNumber });
     if (mapErr) {
       return new Response(JSON.stringify({ error: mapErr.message }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
-    return new Response(JSON.stringify({ ok: true, userId: newUserId, username: uname, role }), {
+    return new Response(JSON.stringify({ ok: true, userId: newUserId, username: phoneNumber, name: String(name).trim(), role }), {
       status: 200,
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });

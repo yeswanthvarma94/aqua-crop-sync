@@ -573,6 +573,18 @@ export type Database = {
         Args: { aid: string }
         Returns: boolean
       }
+      delete_user_account: {
+        Args: { user_uuid: string }
+        Returns: undefined
+      }
+      is_enterprise_owner: {
+        Args: { user_uuid: string }
+        Returns: boolean
+      }
+      validate_phone_number: {
+        Args: { phone_text: string }
+        Returns: boolean
+      }
     }
     Enums: {
       membership_role: "owner" | "manager" | "partner"

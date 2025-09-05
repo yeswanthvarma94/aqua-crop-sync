@@ -57,6 +57,7 @@ interface TeamRow {
   username: string;
   role: UserRole;
   created_at: string;
+  name: string;
 }
 
 // Diagnostics helpers
@@ -120,11 +121,12 @@ const Settings = () => {
   const [resetTarget, setResetTarget] = useState<TeamRow | null>(null);
 
   const [username, setUsername] = useState("");
+  const [memberName, setMemberName] = useState("");
   const [role, setRole] = useState<UserRole>("manager");
   const [password, setPassword] = useState("");
 
   const isOwner = user?.role === "owner";
-  const canManageTeam = isOwner;
+  const canManageTeam = isOwner && plan === "Enterprise";
 
   const refreshTeam = async () => {
     if (!accountId) return;
@@ -136,12 +138,20 @@ const Settings = () => {
       .from("usernames")
       .select("user_id, username")
       .eq("account_id", accountId);
-    const map = new Map((names || []).map((n: any) => [n.user_id as string, n.username as string]));
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("user_id, name")
+      .in("user_id", (members || []).map(m => m.user_id));
+    
+    const nameMap = new Map((names || []).map((n: any) => [n.user_id as string, n.username as string]));
+    const profileMap = new Map((profiles || []).map((p: any) => [p.user_id as string, p.name as string]));
+    
     const rows: TeamRow[] = (members || []).map((m: any) => ({
       user_id: m.user_id as string,
-      username: map.get(m.user_id as string) || "—",
+      username: nameMap.get(m.user_id as string) || "—",
       role: m.role as UserRole,
       created_at: m.created_at as string,
+      name: profileMap.get(m.user_id as string) || "—",
     }));
     setTeam(rows);
     setMemberCount(new Set((members || []).map((m: any) => m.user_id)).size);
@@ -150,17 +160,36 @@ const Settings = () => {
   useEffect(() => { refreshTeam(); }, [accountId]);
 
   const handleAddUser = async () => {
-    const u = username.trim().toLowerCase();
-    if (!u || !password) { toast({ title: "Missing fields", description: "Enter username and password." }); return; }
+    const phoneNumber = username.trim();
+    const name = memberName.trim();
+    
+    if (!phoneNumber || !password || !name) { 
+      toast({ title: "Missing fields", description: "Enter phone number, name, and password." }); 
+      return; 
+    }
+    
+    // Basic phone number validation
+    if (!/^[+]?[1-9]\d{7,14}$/.test(phoneNumber.replace(/[\s\-]/g, ''))) {
+      toast({ title: "Invalid phone number", description: "Please enter a valid phone number." });
+      return;
+    }
+    
     if (!accountId) { toast({ title: "No account", description: "Account not ready." }); return; }
+    
     try {
       const { data, error } = await supabase.functions.invoke("team-create-user", {
-        body: { accountId, username: u, password, role },
+        body: { accountId, username: phoneNumber, password, role, name },
       });
       if (error) throw error;
-      setAddOpen(false); setUsername(""); setPassword(""); setRole("manager");
+      
+      setAddOpen(false); 
+      setUsername(""); 
+      setMemberName("");
+      setPassword(""); 
+      setRole("manager");
+      
       await refreshTeam();
-      toast({ title: "Member added", description: `${u} — ${role}` });
+      toast({ title: "Member added", description: `${name} added as ${role}` });
     } catch (e: any) {
       toast({ title: "Failed to add", description: e.message || "Error" });
     }
@@ -181,7 +210,31 @@ const Settings = () => {
     }
   };
 
-  // New: delete member (owner-only via RLS)
+  // Account deletion function
+  const handleDeleteAccount = async () => {
+    if (!user?.id) return;
+    
+    const confirmed = window.confirm(
+      "Are you sure you want to delete your account? This action cannot be undone and will delete all your data including locations, tanks, stocks, and feeding records."
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+      // Call the database function to delete all user data
+      const { error } = await supabase.rpc('delete_user_account', { 
+        user_uuid: user.id 
+      });
+      
+      if (error) throw error;
+      
+      // Sign out the user after successful deletion
+      await signOut();
+      toast({ title: "Account deleted", description: "Your account has been successfully deleted." });
+    } catch (e: any) {
+      toast({ title: "Failed to delete account", description: e.message || "Error" });
+    }
+  };
   const handleDeleteUser = async (userId: string) => {
     if (!accountId) return;
     try {
@@ -230,10 +283,20 @@ const Settings = () => {
               <Button onClick={() => signInDev("owner")}>Dev Login as Owner</Button>
               <Button variant="secondary" onClick={() => signInDev("manager")}>Dev Login as Manager</Button>
               <Button variant="secondary" onClick={() => signInDev("partner")}>Dev Login as Partner</Button>
-              {user && <Button variant="destructive" onClick={() => signOut()}>Sign out</Button>}
+              <div className="flex gap-2 mt-2">
+                {user && <Button variant="destructive" onClick={() => signOut()}>Sign out</Button>}
+                {user && isOwner && (
+                  <Button variant="destructive" onClick={handleDeleteAccount}>Delete Account</Button>
+                )}
+              </div>
             </div>
           ) : (
-            user && <Button variant="destructive" onClick={() => signOut()}>Sign out</Button>
+            <div className="flex gap-2">
+              {user && <Button variant="destructive" onClick={() => signOut()}>Sign out</Button>}
+              {user && isOwner && (
+                <Button variant="destructive" onClick={handleDeleteAccount}>Delete Account</Button>
+              )}
+            </div>
           )}
         </section>
 
@@ -321,7 +384,9 @@ const Settings = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             {!canManageTeam ? (
-              <p className="text-sm text-muted-foreground">Team management is available on Enterprise and requires Owner access.</p>
+              <p className="text-sm text-muted-foreground">
+                Team management is available for Enterprise plan owners only.
+              </p>
             ) : (
               <>
                 <div className="flex items-center justify-between">
@@ -336,8 +401,20 @@ const Settings = () => {
                       </DialogHeader>
                       <div className="grid gap-3">
                         <div className="grid gap-2">
-                          <Label>Username</Label>
-                          <Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="username" />
+                          <Label>Full Name</Label>
+                          <Input 
+                            value={memberName} 
+                            onChange={(e) => setMemberName(e.target.value)} 
+                            placeholder="Enter full name" 
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>Phone Number</Label>
+                          <Input 
+                            value={username} 
+                            onChange={(e) => setUsername(e.target.value)} 
+                            placeholder="+91XXXXXXXXXX or XXXXXXXXXX" 
+                          />
                         </div>
                         <div className="grid gap-2">
                           <Label>Role</Label>
@@ -348,7 +425,6 @@ const Settings = () => {
                             <SelectContent className="z-50 bg-popover">
                               <SelectItem value="manager">Manager</SelectItem>
                               <SelectItem value="partner">Partner</SelectItem>
-                              <SelectItem value="owner">Owner</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -382,7 +458,7 @@ const Settings = () => {
                       ) : (
                         team.map((m) => (
                           <TableRow key={m.user_id}>
-                            <TableCell className="font-medium">—</TableCell>
+                            <TableCell className="font-medium">{m.name}</TableCell>
                             <TableCell>{m.username}</TableCell>
                             <TableCell className="uppercase"><Badge variant="secondary">{m.role}</Badge></TableCell>
                             <TableCell className="text-right space-x-2">
