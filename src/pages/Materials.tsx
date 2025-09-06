@@ -87,15 +87,15 @@ const Materials = () => {
   const [rev, setRev] = useState(0);
   const [editingMaterial, setEditingMaterial] = useState<any>(null);
 
-  const loadStocks = async (locationId: string) => {
+  const loadStocks = async (farmId: string) => {
     if (!accountId) return;
-    console.log("Loading stocks for materials page. Location:", locationId, "Account:", accountId);
+    console.log("Loading stocks for materials page. Farm:", farmId, "Account:", accountId);
     
     const { data, error } = await supabase
       .from("stocks")
       .select("id, name, category, unit, quantity, price_per_unit, total_amount, min_stock, expiry_date, notes, created_at, updated_at")
       .eq("account_id", accountId)
-      .eq("location_id", locationId)
+      .eq("farm_id", farmId)
       .order("created_at", { ascending: false });
       
     if (!error && data) {

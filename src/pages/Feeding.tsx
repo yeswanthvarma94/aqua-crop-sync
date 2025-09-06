@@ -13,17 +13,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/state/AuthContext";
 import { useTranslation } from "react-i18next";
 
-interface Tank { id: string; locationId: string; name: string; type: "shrimp" | "fish" }
+interface Tank { id: string; farmId: string; name: string; type: "shrimp" | "fish" }
 interface TankDetail { seedDate?: string; cropEnd?: string }
 
-const loadTanksDB = async (accountId: string, locationId: string): Promise<Tank[]> => {
+const loadTanksDB = async (accountId: string, farmId: string): Promise<Tank[]> => {
   const { data } = await supabase
     .from("tanks")
-    .select("id, name, type, location_id")
+    .select("id, name, type, farm_id")
     .eq("account_id", accountId)
-    .eq("location_id", locationId)
+    .eq("farm_id", farmId)
     .order("created_at", { ascending: false });
-  return (data || []).map((t: any) => ({ id: t.id, name: t.name, type: t.type, locationId: t.location_id }));
+  return (data || []).map((t: any) => ({ id: t.id, name: t.name, type: t.type, farmId: t.farm_id }));
 };
 const loadActiveCropDB = async (accountId: string, tankId: string): Promise<TankDetail | null> => {
   const { data } = await supabase
@@ -46,7 +46,7 @@ const Feeding = () => {
   // If a tank is already selected in the header, jump straight to today's feeding for that tank
   useEffect(() => {
     if (location?.id && tank?.id) {
-      navigate(`/locations/${location.id}/tanks/${tank.id}/feeding`, { replace: true });
+      navigate(`/farms/${location.id}/tanks/${tank.id}/feeding`, { replace: true });
     }
   }, [location?.id, tank?.id, navigate]);
 
@@ -67,7 +67,7 @@ const Feeding = () => {
     run();
   }, [accountId, location?.id]);
 
-  const tanks = useMemo(() => tanksAll.filter((t) => t.locationId === location?.id), [tanksAll, location?.id]);
+  const tanks = useMemo(() => tanksAll.filter((t) => t.farmId === location?.id), [tanksAll, location?.id]);
 
   const goFeeding = async (tank: Tank) => {
     const d = activeMap[tank.id];
@@ -75,7 +75,7 @@ const Feeding = () => {
       toast({ title: t("feeding.inactiveTank"), description: t("feeding.startCropToFeed") });
       return;
     }
-    navigate(`/locations/${tank.locationId}/tanks/${tank.id}/feeding`);
+    navigate(`/farms/${tank.farmId}/tanks/${tank.id}/feeding`);
   };
 
   return (
@@ -94,11 +94,11 @@ const Feeding = () => {
         {!location ? (
           <Card>
             <CardHeader>
-              <CardTitle>Select a stock point</CardTitle>
+              <CardTitle>Select a farm</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground mb-3">Choose a stock point to view its tanks for feeding.</p>
-              <Button onClick={() => navigate("/locations")}>Go to Stock Points</Button>
+              <p className="text-sm text-muted-foreground mb-3">Choose a farm to view its tanks for feeding.</p>
+              <Button onClick={() => navigate("/farms")}>Go to Farms</Button>
             </CardContent>
           </Card>
         ) : (
@@ -119,7 +119,7 @@ const Feeding = () => {
                 <TableBody>
                   {tanks.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center text-muted-foreground">No tanks found for this stock point.</TableCell>
+                      <TableCell colSpan={4} className="text-center text-muted-foreground">No tanks found for this farm.</TableCell>
                     </TableRow>
                   ) : (
                     tanks.map((t) => {

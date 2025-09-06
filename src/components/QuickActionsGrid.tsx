@@ -35,15 +35,15 @@ const QuickActionsGrid = () => {
   const handleNav = (key: string) => {
     switch (key) {
       case "locations":
-        navigate("/locations");
+        navigate("/farms");
         break;
       case "tanks":
-        if (location?.id) navigate(`/locations/${location.id}/tanks`);
-        else navigate("/locations");
+        if (location?.id) navigate(`/farms/${location.id}/tanks`);
+        else navigate("/farms");
         break;
       case "stock":
-        if (location?.id) navigate(`/locations/${location.id}/stocks`);
-        else navigate("/locations");
+        if (location?.id) navigate(`/farms/${location.id}/stocks`);
+        else navigate("/farms");
         break;
       case "materials":
         navigate("/materials");

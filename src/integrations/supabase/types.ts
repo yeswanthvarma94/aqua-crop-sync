@@ -80,9 +80,9 @@ export type Database = {
           category: string | null
           created_at: string
           description: string
+          farm_id: string | null
           id: string
           incurred_at: string
-          location_id: string | null
           name: string | null
           notes: string | null
           tank_id: string | null
@@ -94,9 +94,9 @@ export type Database = {
           category?: string | null
           created_at?: string
           description: string
+          farm_id?: string | null
           id?: string
           incurred_at?: string
-          location_id?: string | null
           name?: string | null
           notes?: string | null
           tank_id?: string | null
@@ -108,9 +108,9 @@ export type Database = {
           category?: string | null
           created_at?: string
           description?: string
+          farm_id?: string | null
           id?: string
           incurred_at?: string
-          location_id?: string | null
           name?: string | null
           notes?: string | null
           tank_id?: string | null
@@ -126,52 +126,7 @@ export type Database = {
           },
         ]
       }
-      feeding_logs: {
-        Row: {
-          account_id: string
-          created_at: string
-          fed_at: string
-          id: string
-          location_id: string | null
-          notes: string | null
-          price_per_unit: number | null
-          quantity: number
-          schedule: string | null
-          stock_id: string | null
-          tank_id: string | null
-          updated_at: string
-        }
-        Insert: {
-          account_id: string
-          created_at?: string
-          fed_at?: string
-          id?: string
-          location_id?: string | null
-          notes?: string | null
-          price_per_unit?: number | null
-          quantity: number
-          schedule?: string | null
-          stock_id?: string | null
-          tank_id?: string | null
-          updated_at?: string
-        }
-        Update: {
-          account_id?: string
-          created_at?: string
-          fed_at?: string
-          id?: string
-          location_id?: string | null
-          notes?: string | null
-          price_per_unit?: number | null
-          quantity?: number
-          schedule?: string | null
-          stock_id?: string | null
-          tank_id?: string | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      locations: {
+      farms: {
         Row: {
           account_id: string
           address: string | null
@@ -209,12 +164,57 @@ export type Database = {
           },
         ]
       }
+      feeding_logs: {
+        Row: {
+          account_id: string
+          created_at: string
+          farm_id: string | null
+          fed_at: string
+          id: string
+          notes: string | null
+          price_per_unit: number | null
+          quantity: number
+          schedule: string | null
+          stock_id: string | null
+          tank_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          farm_id?: string | null
+          fed_at?: string
+          id?: string
+          notes?: string | null
+          price_per_unit?: number | null
+          quantity: number
+          schedule?: string | null
+          stock_id?: string | null
+          tank_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          farm_id?: string | null
+          fed_at?: string
+          id?: string
+          notes?: string | null
+          price_per_unit?: number | null
+          quantity?: number
+          schedule?: string | null
+          stock_id?: string | null
+          tank_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       material_logs: {
         Row: {
           account_id: string
           created_at: string
+          farm_id: string | null
           id: string
-          location_id: string | null
           logged_at: string
           note: string | null
           price_per_unit: number | null
@@ -226,8 +226,8 @@ export type Database = {
         Insert: {
           account_id: string
           created_at?: string
+          farm_id?: string | null
           id?: string
-          location_id?: string | null
           logged_at?: string
           note?: string | null
           price_per_unit?: number | null
@@ -239,8 +239,8 @@ export type Database = {
         Update: {
           account_id?: string
           created_at?: string
+          farm_id?: string | null
           id?: string
-          location_id?: string | null
           logged_at?: string
           note?: string | null
           price_per_unit?: number | null
@@ -359,8 +359,8 @@ export type Database = {
           category: string | null
           created_at: string
           expiry_date: string | null
+          farm_id: string | null
           id: string
-          location_id: string | null
           min_stock: number | null
           name: string
           notes: string | null
@@ -375,8 +375,8 @@ export type Database = {
           category?: string | null
           created_at?: string
           expiry_date?: string | null
+          farm_id?: string | null
           id?: string
-          location_id?: string | null
           min_stock?: number | null
           name: string
           notes?: string | null
@@ -391,8 +391,8 @@ export type Database = {
           category?: string | null
           created_at?: string
           expiry_date?: string | null
+          farm_id?: string | null
           id?: string
-          location_id?: string | null
           min_stock?: number | null
           name?: string
           notes?: string | null
@@ -475,8 +475,8 @@ export type Database = {
           area: number | null
           created_at: string
           deleted_at: string | null
+          farm_id: string
           id: string
-          location_id: string
           name: string
           pl_size: number | null
           seed_weight: number | null
@@ -490,8 +490,8 @@ export type Database = {
           area?: number | null
           created_at?: string
           deleted_at?: string | null
+          farm_id: string
           id?: string
-          location_id: string
           name: string
           pl_size?: number | null
           seed_weight?: number | null
@@ -505,8 +505,8 @@ export type Database = {
           area?: number | null
           created_at?: string
           deleted_at?: string | null
+          farm_id?: string
           id?: string
-          location_id?: string
           name?: string
           pl_size?: number | null
           seed_weight?: number | null
@@ -525,9 +525,9 @@ export type Database = {
           },
           {
             foreignKeyName: "tanks_location_id_fkey"
-            columns: ["location_id"]
+            columns: ["farm_id"]
             isOneToOne: false
-            referencedRelation: "locations"
+            referencedRelation: "farms"
             referencedColumns: ["id"]
           },
         ]

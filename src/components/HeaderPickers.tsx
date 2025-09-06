@@ -5,42 +5,44 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/state/AuthContext";
 import { useTranslation } from "react-i18next";
 
-interface Location { id: string; name: string }
-interface Tank { id: string; name: string; type: "shrimp" | "fish"; location_id: string }
+interface Farm { id: string; name: string }
+interface Tank { id: string; name: string; type: "shrimp" | "fish"; farm_id: string }
 
 const HeaderPickers = () => {
   const { accountId } = useAuth();
   const { location, setLocation, tank, setTank } = useSelection();
   const { t } = useTranslation();
 
-  const [locations, setLocations] = useState<Location[]>([]);
+  const [farms, setFarms] = useState<Farm[]>([]);
   const [tanks, setTanks] = useState<Tank[]>([]);
 
-  // Load locations from Supabase for the active account
+  // Load farms from Supabase for the active account
   useEffect(() => {
     let ignore = false;
     const load = async () => {
-      if (!accountId) { setLocations([]); return; }
+      if (!accountId) { setFarms([]); return; }
       const { data } = await supabase
-        .from("locations")
+        .from("farms")
         .select("id,name")
         .eq("account_id", accountId)
+        .is("deleted_at", null)
         .order("created_at", { ascending: false });
-      if (!ignore) setLocations((data as any) || []);
+      if (!ignore) setFarms((data as any) || []);
     };
     load();
     return () => { ignore = true; };
   }, [accountId]);
 
-  // Load tanks for the selected location
+  // Load tanks for the selected farm
   useEffect(() => {
     let ignore = false;
     const loadTanks = async () => {
       if (!location?.id) { setTanks([]); return; }
       const { data } = await supabase
         .from("tanks")
-        .select("id,name,type,location_id")
-        .eq("location_id", location.id)
+        .select("id,name,type,farm_id")
+        .eq("farm_id", location.id)
+        .is("deleted_at", null)
         .order("created_at", { ascending: false });
       if (!ignore) setTanks((data as any) || []);
     };
@@ -48,10 +50,10 @@ const HeaderPickers = () => {
     return () => { ignore = true; };
   }, [location?.id]);
 
-  const onSelectLocation = (locId: string) => {
-    const locObj = locations.find((l) => l.id === locId);
-    setLocation(locObj ? { id: locObj.id, name: locObj.name } : null);
-    // Reset tank when location changes
+  const onSelectFarm = (farmId: string) => {
+    const farmObj = farms.find((f) => f.id === farmId);
+    setLocation(farmObj ? { id: farmObj.id, name: farmObj.name } : null);
+    // Reset tank when farm changes
     setTank(null);
   };
 
@@ -63,11 +65,11 @@ const HeaderPickers = () => {
   return (
     <div className="w-full flex items-center gap-2">
       <div className="flex-1">
-        <Select value={location?.id} onValueChange={onSelectLocation} disabled={locations.length === 0}>
+        <Select value={location?.id} onValueChange={onSelectFarm} disabled={farms.length === 0}>
           <SelectTrigger className="w-full"><SelectValue placeholder={location?.name || t("headers.selectFarm")} /></SelectTrigger>
           <SelectContent>
-            {locations.map((loc) => (
-              <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+            {farms.map((farm) => (
+              <SelectItem key={farm.id} value={farm.id}>{farm.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>

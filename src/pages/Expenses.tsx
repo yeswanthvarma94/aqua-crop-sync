@@ -62,13 +62,13 @@ interface ExpenseEntry {
 }
 
 // Database helpers
-const loadStocks = async (accountId: string, locationId: string): Promise<StockRecord[]> => {
+const loadStocks = async (accountId: string, farmId: string): Promise<StockRecord[]> => {
   try {
     const { data, error } = await supabase
       .from('stocks')
       .select('*')
       .eq('account_id', accountId)
-      .eq('location_id', locationId);
+      .eq('farm_id', farmId);
     
     if (error) throw error;
     
@@ -131,13 +131,13 @@ const loadTankDetail = async (accountId: string, tankId: string): Promise<TankDe
   }
 };
 
-const loadExpenses = async (accountId: string, locationId: string, tankId: string): Promise<ExpenseEntry[]> => {
+const loadExpenses = async (accountId: string, farmId: string, tankId: string): Promise<ExpenseEntry[]> => {
   try {
     const { data, error } = await supabase
       .from('expenses')
       .select('*')
       .eq('account_id', accountId)
-      .eq('location_id', locationId)
+      .eq('farm_id', farmId)
       .eq('tank_id', tankId)
       .order('incurred_at', { ascending: false });
     
@@ -159,13 +159,13 @@ const loadExpenses = async (accountId: string, locationId: string, tankId: strin
   }
 };
 
-const saveExpense = async (accountId: string, locationId: string, tankId: string, entry: Omit<ExpenseEntry, 'id' | 'createdAt'>) => {
+const saveExpense = async (accountId: string, farmId: string, tankId: string, entry: Omit<ExpenseEntry, 'id' | 'createdAt'>) => {
   try {
     const { error } = await supabase
       .from('expenses')
       .insert({
         account_id: accountId,
-        location_id: locationId,
+        farm_id: farmId,
         tank_id: tankId,
         category: entry.category,
         name: entry.name,
@@ -189,13 +189,13 @@ interface FeedingEntryWithPrice extends FeedingEntry {
 }
 
 // Utility to scan feeding entries across crop (no FK join)
-const listFeedingAcrossCrop = async (accountId: string, locationId: string, tankId: string, startISO?: string, endISO?: string): Promise<FeedingEntryWithPrice[]> => {
+const listFeedingAcrossCrop = async (accountId: string, farmId: string, tankId: string, startISO?: string, endISO?: string): Promise<FeedingEntryWithPrice[]> => {
   try {
     let query = supabase
       .from('feeding_logs')
       .select('*')
       .eq('account_id', accountId)
-      .eq('location_id', locationId)
+      .eq('farm_id', farmId)
       .eq('tank_id', tankId);
     
     if (startISO) {
@@ -237,7 +237,7 @@ interface MaterialLogEntry {
   createdAt: string;
 }
 
-const listMaterialsAcrossCrop = async (accountId: string, locationId: string, tankId: string, startISO?: string, endISO?: string): Promise<MaterialLogEntry[]> => {
+const listMaterialsAcrossCrop = async (accountId: string, farmId: string, tankId: string, startISO?: string, endISO?: string): Promise<MaterialLogEntry[]> => {
   try {
     let query = supabase
       .from('material_logs')
@@ -246,7 +246,7 @@ const listMaterialsAcrossCrop = async (accountId: string, locationId: string, ta
         stocks!inner(name, unit, category)
       `)
       .eq('account_id', accountId)
-      .eq('location_id', locationId)
+      .eq('farm_id', farmId)
       .eq('tank_id', tankId);
     
     if (startISO) {
@@ -501,7 +501,7 @@ const Expenses = () => {
           .from('expenses')
           .insert([{
             account_id: accountId,
-            location_id: location.id,
+            farm_id: location.id,
             tank_id: tank.id,
             category,
             name,

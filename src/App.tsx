@@ -12,7 +12,7 @@ import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import { AuthProvider, useAuth } from "@/state/AuthContext";
 import { SelectionProvider } from "@/state/SelectionContext";
-import Locations from "./pages/Locations";
+import Farms from "./pages/Farms";
 import Tanks from "./pages/Tanks";
 import TankDetail from "./pages/TankDetail";
 import Stocks from "./pages/Stocks";
@@ -59,11 +59,11 @@ const App = () => (
               <Route path="/materials" element={<ProtectedRoute><Materials /></ProtectedRoute>} />
               <Route path="/expenses" element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-              <Route path="/locations" element={<ProtectedRoute><Locations /></ProtectedRoute>} />
-              <Route path="/locations/:locationId/tanks" element={<ProtectedRoute><Tanks /></ProtectedRoute>} />
-              <Route path="/locations/:locationId/tanks/:tankId" element={<ProtectedRoute><TankDetail /></ProtectedRoute>} />
-              <Route path="/locations/:locationId/tanks/:tankId/feeding" element={<ProtectedRoute><TankFeeding /></ProtectedRoute>} />
-              <Route path="/locations/:locationId/stocks" element={<ProtectedRoute><Stocks /></ProtectedRoute>} />
+              <Route path="/farms" element={<ProtectedRoute><Farms /></ProtectedRoute>} />
+              <Route path="/farms/:farmId/tanks" element={<ProtectedRoute><Tanks /></ProtectedRoute>} />
+              <Route path="/farms/:farmId/tanks/:tankId" element={<ProtectedRoute><TankDetail /></ProtectedRoute>} />
+              <Route path="/farms/:farmId/tanks/:tankId/feeding" element={<ProtectedRoute><TankFeeding /></ProtectedRoute>} />
+              <Route path="/farms/:farmId/stocks" element={<ProtectedRoute><Stocks /></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
               <Route path="/recycle-bin" element={<ProtectedRoute><RecycleBin /></ProtectedRoute>} />
               <Route path="/calculators" element={<ProtectedRoute><Calculators /></ProtectedRoute>} />

@@ -38,8 +38,8 @@ export const checkLocationLimit = async (accountId: string, plan: Plan): Promise
     return { canCreate: true };
   }
 
-  const { data: locations, error } = await supabase
-    .from("locations")
+  const { data: farms, error } = await supabase
+    .from("farms")
     .select("id")
     .eq("account_id", accountId);
 
@@ -47,19 +47,19 @@ export const checkLocationLimit = async (accountId: string, plan: Plan): Promise
     return { canCreate: false, message: "Error checking location limit" };
   }
 
-  const currentCount = locations?.length || 0;
+  const currentCount = farms?.length || 0;
   
   if (currentCount >= limits.locations) {
     return { 
       canCreate: false, 
-      message: `You've reached your limit of ${limits.locations} stock point${limits.locations > 1 ? 's' : ''}. Upgrade to ${plan === 'Free' ? 'Pro' : 'Enterprise'} plan to add more.`
+      message: `You've reached your limit of ${limits.locations} farm${limits.locations > 1 ? 's' : ''}. Upgrade to ${plan === 'Free' ? 'Pro' : 'Enterprise'} plan to add more.`
     };
   }
 
   return { canCreate: true };
 };
 
-export const checkTankLimit = async (accountId: string, locationId: string, plan: Plan): Promise<{ canCreate: boolean; message?: string }> => {
+export const checkTankLimit = async (accountId: string, farmId: string, plan: Plan): Promise<{ canCreate: boolean; message?: string }> => {
   const limits = getPlanLimits(plan);
   
   if (limits.tanksPerLocation === Infinity) {
@@ -70,7 +70,7 @@ export const checkTankLimit = async (accountId: string, locationId: string, plan
     .from("tanks")
     .select("id")
     .eq("account_id", accountId)
-    .eq("location_id", locationId);
+    .eq("farm_id", farmId);
 
   if (error) {
     return { canCreate: false, message: "Error checking tank limit" };
@@ -81,7 +81,7 @@ export const checkTankLimit = async (accountId: string, locationId: string, plan
   if (currentCount >= limits.tanksPerLocation) {
     return { 
       canCreate: false, 
-      message: `You've reached your limit of ${limits.tanksPerLocation} tank${limits.tanksPerLocation > 1 ? 's' : ''} per stock point. Upgrade to ${plan === 'Free' ? 'Pro' : 'Enterprise'} plan to add more.`
+      message: `You've reached your limit of ${limits.tanksPerLocation} tank${limits.tanksPerLocation > 1 ? 's' : ''} per farm. Upgrade to ${plan === 'Free' ? 'Pro' : 'Enterprise'} plan to add more.`
     };
   }
 
