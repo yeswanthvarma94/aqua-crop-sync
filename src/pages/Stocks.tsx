@@ -75,7 +75,7 @@ const Stocks = () => {
   const [expiry, setExpiry] = useState<Date | undefined>(undefined);
   const [notes, setNotes] = useState<string>("");
 
-  useSEO("Stocks | AquaLedger", "Manage stock per stock point: add, view, low-stock and expiry alerts.");
+  useSEO("Stocks | AquaLedger", "Manage stock per farm: add, view, low-stock and expiry alerts.");
 
   useEffect(() => {
     if (!location && locationId) setLocation({ id: locationId, name: locationId });

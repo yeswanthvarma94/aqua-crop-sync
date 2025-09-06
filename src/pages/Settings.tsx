@@ -318,8 +318,8 @@ const Settings = () => {
                     </div>
                   </div>
                   <div className="space-y-2 text-sm">
-                    <div>• 1 Stock Point</div>
-                    <div>• 2 Tanks per stock point</div>
+                    <div>• 1 Farm</div>
+                    <div>• 2 Tanks per farm</div>
                     <div>• All features included</div>
                     <div className="text-muted-foreground">• No team access</div>
                   </div>
@@ -338,8 +338,8 @@ const Settings = () => {
                     </div>
                   </div>
                   <div className="space-y-2 text-sm">
-                    <div>• 3 Stock Points</div>
-                    <div>• 4 Tanks per stock point</div>
+                    <div>• 3 Farms</div>
+                    <div>• 4 Tanks per farm</div>
                     <div>• All features included</div>
                     <div className="text-muted-foreground">• No team access</div>
                   </div>
@@ -358,7 +358,7 @@ const Settings = () => {
                     </div>
                   </div>
                   <div className="space-y-2 text-sm">
-                    <div>• Unlimited Locations</div>
+                    <div>• Unlimited Farms</div>
                     <div>• Unlimited Tanks</div>
                     <div>• All features included</div>
                     <div>• Team access (User roles)</div>
