@@ -23,7 +23,7 @@ import { loadPlan, checkTankLimit } from "@/lib/subscription";
 
 interface Tank { 
   id: string; 
-  locationId: string; 
+  farmId: string; 
   name: string; 
   type: "shrimp" | "fish";
   seed_weight?: number | null;
@@ -58,7 +58,7 @@ const useSEO = (title: string, description: string) => {
 };
 
 const Tanks = () => {
-  const { locationId } = useParams();
+  const { farmId } = useParams();
   const navigate = useNavigate();
   const { location, setLocation, setTank } = useSelection();
 
@@ -80,36 +80,36 @@ const Tanks = () => {
 
   useSEO("Tanks | AquaLedger", "Manage tanks for the selected location. Add, view, and open details.");
 
-  // Ensure selection context includes actual location name from DB
+  // Ensure selection context includes actual farm name from DB
   useEffect(() => {
     let ignore = false;
-    const loadLocation = async () => {
-      if (!locationId) return;
+    const loadFarm = async () => {
+      if (!farmId) return;
       // If already set correctly, skip
-      if (location?.id === locationId && location?.name && location.name !== locationId) return;
+      if (location?.id === farmId && location?.name && location.name !== farmId) return;
         const { data } = await supabase
-          .from("locations")
+          .from("farms")
           .select("id,name")
           .eq("account_id", accountId)
-          .eq("id", locationId)
+          .eq("id", farmId)
           .maybeSingle();
       if (!ignore && data) {
         setLocation({ id: (data as any).id, name: (data as any).name });
       }
     };
-    loadLocation();
+    loadFarm();
     return () => { ignore = true; };
-  }, [locationId, setLocation, location?.id, location?.name]);
+  }, [farmId, setLocation, location?.id, location?.name]);
 
   const loadTanks = async () => {
-    if (!accountId || !locationId) return;
-    console.log("Loading tanks for account:", accountId, "location:", locationId);
+    if (!accountId || !farmId) return;
+    console.log("Loading tanks for account:", accountId, "farm:", farmId);
     
     const { data, error } = await supabase
       .from("tanks")
-      .select("id, name, type, location_id, seed_weight, pl_size, total_seed, area, status")
+      .select("id, name, type, farm_id, seed_weight, pl_size, total_seed, area, status")
       .eq("account_id", accountId)
-      .eq("location_id", locationId)
+      .eq("farm_id", farmId)
       .is("deleted_at", null) // Only load non-deleted tanks
       .order("created_at", { ascending: false });
       
@@ -119,7 +119,7 @@ const Tanks = () => {
         id: t.id, 
         name: t.name, 
         type: t.type, 
-        locationId: t.location_id,
+        farmId: t.farm_id,
         seed_weight: t.seed_weight,
         pl_size: t.pl_size,
         total_seed: t.total_seed,
@@ -142,7 +142,7 @@ const Tanks = () => {
   useEffect(() => {
     loadTanks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [locationId, rev, accountId]);
+  }, [farmId, rev, accountId]);
 
   const [activeCrops, setActiveCrops] = useState<Record<string, TankDetail>>({});
   const loadActiveCrops = async (tankIds: string[]) => {
@@ -173,11 +173,11 @@ const Tanks = () => {
     }
   }, [tanksAll, accountId]);
 
-  const tanks = useMemo(() => tanksAll.filter((t) => t.locationId === locationId), [tanksAll, locationId]);
+  const tanks = useMemo(() => tanksAll.filter((t) => t.farmId === farmId), [tanksAll, farmId]);
 
   const handleSelectTank = (t: Tank) => {
     setTank({ id: t.id, name: t.name, type: t.type });
-    navigate(`/locations/${t.locationId}/tanks/${t.id}`);
+    navigate(`/farms/${t.farmId}/tanks/${t.id}`);
   };
 
   const isValid = formName.trim().length > 0;
@@ -205,12 +205,12 @@ const Tanks = () => {
   };
 
   const onCreateTank = async () => {
-    if (!locationId || !isValid || !accountId) return;
+    if (!farmId || !isValid || !accountId) return;
     
     // Check tank limit only for new tanks
     if (!editingTank) {
       const plan = loadPlan();
-      const limitCheck = await checkTankLimit(accountId, locationId, plan);
+      const limitCheck = await checkTankLimit(accountId, farmId, plan);
       
       if (!limitCheck.canCreate) {
         toast({
@@ -309,7 +309,7 @@ const Tanks = () => {
         const tankData = {
           id, 
           account_id: accountId, 
-          location_id: locationId, 
+          farm_id: farmId, 
           name, 
           type: formType,
           seed_weight: formSeedWeight ? parseFloat(formSeedWeight) : null,

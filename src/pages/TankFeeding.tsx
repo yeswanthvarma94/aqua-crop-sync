@@ -19,7 +19,7 @@ import { useAuth } from "@/state/AuthContext";
 import { CalendarIcon, Edit2 } from "lucide-react";
 
 
-interface Tank { id: string; locationId: string; name: string; type: "shrimp" | "fish" }
+interface Tank { id: string; farmId: string; name: string; type: "shrimp" | "fish" }
 interface TankDetail { seedDate?: string; cropEnd?: string; name: string; type: "shrimp" | "fish" }
 
 interface StockRecord {
@@ -52,10 +52,10 @@ interface FeedingEntry {
 const loadTankFromDB = async (tankId: string) => {
   const { data } = await supabase
     .from("tanks")
-    .select("id, name, type, location_id")
+    .select("id, name, type, farm_id")
     .eq("id", tankId)
     .single();
-  return data ? { id: data.id, name: data.name, type: data.type, locationId: data.location_id } : null;
+  return data ? { id: data.id, name: data.name, type: data.type, farmId: data.farm_id } : null;
 };
 
 const loadActiveCropFromDB = async (tankId: string) => {
@@ -68,12 +68,12 @@ const loadActiveCropFromDB = async (tankId: string) => {
   return data ? { seedDate: data.seed_date, cropEnd: data.end_date || undefined } : null;
 };
 
-const loadStocksFromDB = async (accountId: string, locationId: string): Promise<StockRecord[]> => {
+const loadStocksFromDB = async (accountId: string, farmId: string): Promise<StockRecord[]> => {
   const { data } = await supabase
     .from("stocks")
     .select("*")
     .eq("account_id", accountId)
-    .eq("location_id", locationId)
+    .eq("farm_id", farmId)
     .eq("category", "feed");
   return (data || []).map((s: any) => ({
     id: s.id,
@@ -92,7 +92,7 @@ const loadStocksFromDB = async (accountId: string, locationId: string): Promise<
 };
 
 const TankFeeding = () => {
-  const { locationId, tankId } = useParams();
+  const { farmId, tankId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user, accountId } = useAuth();
@@ -144,18 +144,18 @@ const TankFeeding = () => {
 
   useEffect(() => {
     const loadData = async () => {
-      if (accountId && locationId) {
-        const stockData = await loadStocksFromDB(accountId, locationId);
+      if (accountId && farmId) {
+        const stockData = await loadStocksFromDB(accountId, farmId);
         setStocks(stockData);
       }
     };
     loadData();
-  }, [accountId, locationId, rev]);
+  }, [accountId, farmId, rev]);
 
   // Load feeding entries from Supabase
   useEffect(() => {
     const loadFeedingEntries = async () => {
-      if (!locationId || !tankId) return;
+      if (!farmId || !tankId) return;
       
       try {
         const startOfDay = new Date(selectedDate);
@@ -167,7 +167,7 @@ const TankFeeding = () => {
           .from("feeding_logs")
           .select("id, schedule, quantity, fed_at, notes, stock_id")
           .eq("account_id", accountId as string)
-          .eq("location_id", locationId)
+          .eq("farm_id", farmId)
           .eq("tank_id", tankId)
           .gte("fed_at", startOfDay.toISOString())
           .lte("fed_at", endOfDay.toISOString())
@@ -197,19 +197,19 @@ const TankFeeding = () => {
     };
 
     loadFeedingEntries();
-  }, [accountId, locationId, tankId, selectedDateKey, rev, stocks]);
+  }, [accountId, farmId, tankId, selectedDateKey, rev, stocks]);
 
   // Load total consumption from crop start
   useEffect(() => {
     const loadTotalConsumption = async () => {
-      if (!locationId || !tankId || !hasActiveCrop || !seedDate) return;
+      if (!farmId || !tankId || !hasActiveCrop || !seedDate) return;
       
       try {
         const { data, error } = await supabase
           .from("feeding_logs")
           .select("quantity")
           .eq("account_id", accountId as string)
-          .eq("location_id", locationId)
+          .eq("farm_id", farmId)
           .eq("tank_id", tankId)
           .gte("fed_at", seedDate.toISOString());
 
@@ -224,7 +224,7 @@ const TankFeeding = () => {
     };
 
     loadTotalConsumption();
-  }, [accountId, locationId, tankId, hasActiveCrop, seedDate, rev]);
+  }, [accountId, farmId, tankId, hasActiveCrop, seedDate, rev]);
 
   const completed = useMemo(() => new Set(entries.map(e => e.schedule)), [entries]);
   const remainingStock = selectedStock?.quantity ?? 0;
@@ -250,7 +250,7 @@ const TankFeeding = () => {
       toast({ title: "Inactive tank", description: "Start crop to record feeding." });
       return;
     }
-    if (!locationId || !tankId) return;
+    if (!farmId || !tankId) return;
     if (!schedule) {
       toast({ title: "Select schedule", description: "Choose a feeding schedule." });
       return;
@@ -366,7 +366,7 @@ const TankFeeding = () => {
           .from("feeding_logs")
           .insert({
             account_id: accountId,
-            location_id: locationId,
+            farm_id: farmId,
             tank_id: tankId,
             stock_id: selectedStock.id,
             schedule: schedule,
@@ -392,7 +392,7 @@ const TankFeeding = () => {
           .from("expenses")
           .insert({
             account_id: accountId,
-            location_id: locationId,
+            farm_id: farmId,
             tank_id: tankId,
             category: "feed",
             name: `${selectedStock.name} feed`,
@@ -429,7 +429,7 @@ const TankFeeding = () => {
     <main className="p-4 space-y-4">
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="outline" size="sm" onClick={() => navigate(`/locations/${locationId}/tanks`)}>← Tanks</Button>
+          <Button variant="outline" size="sm" onClick={() => navigate(`/farms/${farmId}/tanks`)}>← Tanks</Button>
           <h1 className="text-xl font-semibold">Feeding — { name || "Tank" }</h1>
         </div>
         <div className="flex items-center gap-4">

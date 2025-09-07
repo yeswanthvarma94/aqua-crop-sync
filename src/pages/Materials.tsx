@@ -127,18 +127,18 @@ const Materials = () => {
     }
   };
 
-  const loadLogs = async (locationId: string, tankId: string, dateKey: string) => {
+  const loadLogs = async (farmId: string, tankId: string, dateKey: string) => {
     if (!accountId) return;
-    console.log("Loading material logs. Location:", locationId, "Tank:", tankId, "Date:", dateKey, "Account:", accountId);
+    console.log("Loading material logs. Farm:", farmId, "Tank:", tankId, "Date:", dateKey, "Account:", accountId);
     
     const start = new Date(`${dateKey}T00:00:00.000Z`);
     const end = new Date(`${dateKey}T23:59:59.999Z`);
     
     const { data, error } = await supabase
       .from("material_logs")
-      .select("id, stock_id, quantity, note, tank_id, location_id, logged_at, stocks(name, category, unit)")
+      .select("id, stock_id, quantity, note, tank_id, farm_id, logged_at, stocks(name, category, unit)")
       .eq("account_id", accountId)
-      .eq("location_id", locationId)
+      .eq("farm_id", farmId)
       .eq("tank_id", tankId)
       .gte("logged_at", start.toISOString())
       .lte("logged_at", end.toISOString())
@@ -383,7 +383,7 @@ const Materials = () => {
           .from("material_logs")
           .insert([{
             account_id: accountId,
-            location_id: location.id,
+            farm_id: location.id,
             tank_id: tank.id,
             stock_id: selectedStock.id,
             quantity,
@@ -440,7 +440,7 @@ const Materials = () => {
           .from("expenses")
           .insert([{
             account_id: accountId,
-            location_id: location.id,
+            farm_id: location.id,
             tank_id: tank.id,
             category: selectedStock.category,
             name: `${selectedStock.name} ${selectedStock.category}`,

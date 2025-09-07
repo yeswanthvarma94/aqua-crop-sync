@@ -16,7 +16,7 @@ import { useAuth } from "@/state/AuthContext";
 
 interface DeletedTank { 
   id: string; 
-  locationId: string; 
+  farmId: string; 
   name: string; 
   type: "shrimp" | "fish";
   seed_weight?: number | null;
@@ -108,7 +108,7 @@ const RecycleBin = () => {
     
     const { data, error } = await supabase
       .from("tanks")
-      .select("id, name, type, location_id, seed_weight, pl_size, total_seed, area, status, deleted_at")
+      .select("id, name, type, farm_id, seed_weight, pl_size, total_seed, area, status, deleted_at")
       .eq("account_id", accountId)
       .not("deleted_at", "is", null)
       .order("deleted_at", { ascending: false });
@@ -119,7 +119,7 @@ const RecycleBin = () => {
         id: t.id, 
         name: t.name, 
         type: t.type, 
-        locationId: t.location_id,
+        farmId: t.farm_id,
         seed_weight: t.seed_weight,
         pl_size: t.pl_size,
         total_seed: t.total_seed,

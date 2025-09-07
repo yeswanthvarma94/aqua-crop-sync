@@ -134,9 +134,9 @@ const Reports = () => {
       const startTs = `${startDate}T00:00:00`;
       const endTs = `${endDate}T23:59:59`;
       const [fRes, mRes, eRes] = await Promise.all([
-        supabase.from("feeding_logs").select("id, schedule, stock_id, quantity, fed_at, notes").eq("account_id", accountId).eq("location_id", location.id).eq("tank_id", tank.id).gte("fed_at", startTs).lte("fed_at", endTs).order("fed_at", { ascending: true }),
-        supabase.from("material_logs").select("id, stock_id, quantity, logged_at, note").eq("account_id", accountId).eq("location_id", location.id).eq("tank_id", tank.id).gte("logged_at", startTs).lte("logged_at", endTs).order("logged_at", { ascending: true }),
-        supabase.from("expenses").select("id, name, amount, incurred_at, notes, category").eq("account_id", accountId).eq("location_id", location.id).eq("tank_id", tank.id).gte("incurred_at", startDate).lte("incurred_at", endDate).order("incurred_at", { ascending: true }),
+        supabase.from("feeding_logs").select("id, schedule, stock_id, quantity, fed_at, notes").eq("account_id", accountId).eq("farm_id", location.id).eq("tank_id", tank.id).gte("fed_at", startTs).lte("fed_at", endTs).order("fed_at", { ascending: true }),
+        supabase.from("material_logs").select("id, stock_id, quantity, logged_at, note").eq("account_id", accountId).eq("farm_id", location.id).eq("tank_id", tank.id).gte("logged_at", startTs).lte("logged_at", endTs).order("logged_at", { ascending: true }),
+        supabase.from("expenses").select("id, name, amount, incurred_at, notes, category").eq("account_id", accountId).eq("farm_id", location.id).eq("tank_id", tank.id).gte("incurred_at", startDate).lte("incurred_at", endDate).order("incurred_at", { ascending: true }),
       ]);
       const fData = (fRes as any).data || [];
       const mData = (mRes as any).data || [];
