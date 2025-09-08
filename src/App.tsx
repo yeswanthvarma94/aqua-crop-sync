@@ -12,6 +12,8 @@ import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import { AuthProvider, useAuth } from "@/state/AuthContext";
 import { SelectionProvider } from "@/state/SelectionContext";
+import { LoadingProvider, useLoading } from "@/contexts/LoadingContext";
+import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import Farms from "./pages/Farms";
 import Tanks from "./pages/Tanks";
 import TankDetail from "./pages/TankDetail";
@@ -42,6 +44,25 @@ const PublicOnlyRoute = ({ children }: { children: JSX.Element }) => {
   return children;
 };
 
+// Loading wrapper component
+const LoadingWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isLoading } = useLoading();
+  
+  return (
+    <>
+      {children}
+      <LoadingOverlay 
+        isVisible={isLoading('initial-load')} 
+        message="Loading your data..."
+      />
+      <LoadingOverlay 
+        isVisible={isLoading('sync')} 
+        message="Syncing data..."
+      />
+    </>
+  );
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -50,7 +71,9 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <SelectionProvider>
-            <Routes>
+            <LoadingProvider>
+              <LoadingWrapper>
+                <Routes>
               <Route path="/auth" element={<PublicOnlyRoute><Auth /></PublicOnlyRoute>} />
               <Route path="/signup" element={<PublicOnlyRoute><SignUp /></PublicOnlyRoute>} />
               <Route path="/test-auth" element={<TestAuth />} />
@@ -70,7 +93,9 @@ const App = () => (
               
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<ProtectedRoute><NotFound /></ProtectedRoute>} />
-            </Routes>
+                </Routes>
+              </LoadingWrapper>
+            </LoadingProvider>
           </SelectionProvider>
         </AuthProvider>
       </BrowserRouter>

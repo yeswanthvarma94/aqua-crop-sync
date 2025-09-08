@@ -7,14 +7,16 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
-import { Pencil, Trash2, ListTree } from "lucide-react";
+import { Pencil, Trash2, ListTree, Plus, ArrowLeft } from "lucide-react";
 import { useSelection } from "@/state/SelectionContext";
-
 import { useAuth } from "@/state/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { useOfflineFarms } from "@/hooks/useOfflineFarms";
+import { useNetworkStatus } from "@/hooks/useNetworkStatus";
+import { useLoading } from "@/contexts/LoadingContext";
 import { toast } from "@/hooks/use-toast";
-import { loadPlan, checkLocationLimit } from "@/lib/subscription";
+import { Badge } from "@/components/ui/badge";
 
 interface Farm {
   id: string;
@@ -23,7 +25,6 @@ interface Farm {
   account_id?: string;
 }
 
-
 const useSEO = (title: string, description: string) => {
   useEffect(() => {
     document.title = title;
@@ -31,11 +32,6 @@ const useSEO = (title: string, description: string) => {
     metaDesc.setAttribute("name", "description");
     metaDesc.setAttribute("content", description);
     if (!metaDesc.parentNode) document.head.appendChild(metaDesc);
-
-    const canonical = document.querySelector('link[rel="canonical"]') || document.createElement("link");
-    canonical.setAttribute("rel", "canonical");
-    canonical.setAttribute("href", window.location.href);
-    if (!canonical.parentNode) document.head.appendChild(canonical);
   }, [title, description]);
 };
 
@@ -44,8 +40,10 @@ const Farms = () => {
   const navigate = useNavigate();
   const { setLocation, setTank } = useSelection();
   const { accountId } = useAuth();
-
-  const [farms, setFarms] = useState<Farm[]>([]);
+  const { isOnline } = useNetworkStatus();
+  const { isLoading } = useLoading();
+  
+  const { data: farms, create, update, remove, refresh, isInitialized } = useOfflineFarms();
   
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Farm | null>(null);
@@ -58,118 +56,31 @@ const Farms = () => {
     setForm({ name: "", address: "" });
   };
 
-  const load = async () => {
-    if (!accountId) return;
-    console.log("Loading farms for account:", accountId);
-    
-    const { data, error } = await supabase
-      .from("farms")
-      .select("id, name, address, account_id")
-      .eq("account_id", accountId)
-      .is("deleted_at", null) // Only load non-deleted farms
-      .order("created_at", { ascending: false });
-      
-    if (!error && data) {
-      console.log("Loaded farms:", data);
-      setFarms(data as any);
-    } else {
-      console.error("Error loading farms:", error);
-      if (error) {
-        toast({ 
-          title: "Database Error", 
-          description: "Failed to load farms. Please refresh the page.", 
-          variant: "destructive" 
-        });
-      }
-    }
-  };
-
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accountId]);
-
   const onSubmit = async () => {
     if (!isValid || !accountId) return;
 
     try {
       if (editing) {
-        console.log("Updating farm:", editing.id, "with data:", {
+        await update(editing.id, {
           name: form.name.trim(),
           address: form.address?.trim() || null,
         });
-        
-        const { data, error } = await supabase
-          .from("farms")
-          .update({
-            name: form.name.trim(),
-            address: form.address?.trim() || null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", editing.id)
-          .eq("account_id", accountId)
-          .select();
-          
-        if (error) {
-          console.error("Farm update error:", error);
-          throw error;
-        }
-        
-        if (!data || data.length === 0) {
-          throw new Error("No farm was updated. Please check if the farm exists and you have permission.");
-        }
-        
-        console.log("Farm updated successfully:", data[0]);
-        toast({ title: "Updated", description: `${form.name} has been updated successfully.` });
       } else {
-        // Check location limit for new farm
-        const plan = loadPlan();
-        const limitCheck = await checkLocationLimit(accountId, plan);
-        
-        if (!limitCheck.canCreate) {
-          toast({
-            title: "Plan Limit Reached",
-            description: limitCheck.message,
-            variant: "destructive",
-          });
-          return;
-        }
-
-        const newFarm: Farm = {
-          id: crypto.randomUUID(),
+        await create({
           name: form.name.trim(),
           address: form.address?.trim() || null,
-          account_id: accountId,
-        };
-        
-        console.log("Creating new farm:", newFarm);
-        
-        const { data, error } = await supabase
-          .from("farms")
-          .insert([newFarm])
-          .select();
-          
-        if (error) {
-          console.error("Farm creation error:", error);
-          throw error;
-        }
-        
-        console.log("Farm created successfully:", data[0]);
-        toast({ title: "Created", description: `${form.name} has been created successfully.` });
+          account_id: accountId
+        });
       }
+
       setOpen(false);
       resetForm();
-      
-      // Force reload farms to reflect changes
-      await load();
-    } catch (error: any) {
-      console.error(`Failed to ${editing ? "update" : "create"} farm:`, error);
-      const errorMsg = error?.message || `Failed to ${editing ? "update" : "create"} farm. Please try again.`;
+    } catch (error) {
+      console.error("Farm operation error:", error);
       toast({
         title: "Error",
-        description: errorMsg,
-        variant: "destructive",
+        description: "Failed to save farm. Please try again.",
+        variant: "destructive"
       });
     }
   };
@@ -182,38 +93,13 @@ const Farms = () => {
 
   const onDelete = async (farm: Farm) => {
     try {
-      console.log("Deleting farm:", farm.id, "Account ID:", accountId);
-      
-      // Soft delete - add deleted_at timestamp instead of hard delete
-      const { data, error } = await supabase
-        .from("farms")
-        .update({ deleted_at: new Date().toISOString() })
-        .eq("id", farm.id)
-        .eq("account_id", accountId)
-        .select();
-        
-      if (error) {
-        console.error("Delete error:", error);
-        throw error;
-      }
-      
-      // Check if any rows were actually updated
-      if (!data || data.length === 0) {
-        throw new Error("No records were updated. Farm may not exist or you may not have permission.");
-      }
-      
-      console.log("Successfully soft deleted farm:", data[0]);
-      toast({ title: "Farm Deleted", description: `${farm.name} has been moved to recycle bin` });
-      await load();
+      await remove(farm.id);
     } catch (error: any) {
       console.error("Failed to delete farm:", error);
-      const errorMessage = error?.message?.includes('foreign key') 
-        ? 'Cannot delete farm with existing tanks. Delete tanks first.'
-        : error?.message || 'Failed to delete farm. Please try again.';
       toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive",
+        title: "Error", 
+        description: "Failed to delete farm. Please try again.",
+        variant: "destructive"
       });
     }
   };
@@ -225,89 +111,130 @@ const Farms = () => {
   };
 
   return (
-    <main className="p-4 space-y-4">
-      <header className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="outline" size="sm" onClick={() => navigate("/")}>← Home</Button>
-          <h1 className="text-xl font-semibold">Farms</h1>
+    <div className="min-h-screen bg-background p-4">
+      {/* Header */}
+      <div className="mb-6 flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <Button variant="ghost" size="icon" onClick={() => navigate("/")} className="shrink-0">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <h1 className="text-2xl font-bold">Farms</h1>
+          {!isOnline && (
+            <Badge variant="outline" className="bg-destructive/10 text-destructive">
+              Offline Mode
+            </Badge>
+          )}
         </div>
-        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
+        
+        <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button size="sm">Add Farm</Button>
+            <Button onClick={resetForm}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Farm
+            </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{editing ? "Edit Farm" : "Add Farm"}</DialogTitle>
+              <DialogTitle>{editing ? "Edit Farm" : "Add New Farm"}</DialogTitle>
             </DialogHeader>
-            <div className="grid gap-4 py-2">
-              <div className="grid gap-2">
-                <Label htmlFor="name">Name</Label>
-                <Input id="name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g., Farm A" />
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="name" className="text-right">Name</Label>
+                <Input
+                  id="name"
+                  value={form.name}
+                  onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
+                  className="col-span-3"
+                  placeholder="Enter farm name"
+                />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="address">Address (optional)</Label>
-                <Input id="address" value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} placeholder="Village, District" />
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="address" className="text-right">Address</Label>
+                <Input
+                  id="address"
+                  value={form.address}
+                  onChange={(e) => setForm(prev => ({ ...prev, address: e.target.value }))}
+                  className="col-span-3"
+                  placeholder="Enter address (optional)"
+                />
               </div>
             </div>
             <DialogFooter>
-              <Button variant="secondary" onClick={() => { setOpen(false); resetForm(); }}>Cancel</Button>
-              <Button onClick={onSubmit} disabled={!isValid}>{editing ? "Save" : "Create"}</Button>
+              <Button onClick={onSubmit} disabled={!isValid}>
+                {editing ? "Update" : "Create"} Farm
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </header>
+      </div>
 
-
+      {/* Farms Table */}
       <Card>
         <CardHeader>
-          <CardTitle>All Farms</CardTitle>
+          <CardTitle className="flex items-center justify-between">
+            <span>Your Farms</span>
+            {isLoading('farms') && <LoadingSpinner />}
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Address</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {farms.length === 0 ? (
+          {!isInitialized ? (
+            <div className="flex items-center justify-center py-8">
+              <LoadingSpinner />
+              <span className="ml-2">Loading farms...</span>
+            </div>
+          ) : farms.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">No farms available yet.</p>
+              <Button
+                onClick={() => setOpen(true)}
+                className="mt-4"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add Your First Farm
+              </Button>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center text-muted-foreground">No farms yet. Add your first one.</TableCell>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Address</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
-              ) : (
-                farms.map((farm) => (
+              </TableHeader>
+              <TableBody>
+                {farms.map((farm) => (
                   <TableRow key={farm.id}>
                     <TableCell className="font-medium">{farm.name}</TableCell>
                     <TableCell>{farm.address || "—"}</TableCell>
-                    <TableCell className="flex gap-2 justify-end">
-                      <Button variant="secondary" size="sm" onClick={() => openTanks(farm)}>
-                        <ListTree className="mr-1" size={16} /> Tanks
+                    <TableCell className="space-x-2">
+                      <Button size="sm" onClick={() => openTanks(farm)}>
+                        <ListTree className="mr-1 h-3 w-3" />
+                        Tanks
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => onEdit(farm)}>
-                        <Pencil className="mr-1" size={16} /> Edit
+                      <Button size="sm" variant="outline" onClick={() => onEdit(farm)}>
+                        <Pencil className="mr-1 h-3 w-3" />
+                        Edit
                       </Button>
                       <ConfirmDialog
-                        title="Delete Farm"
-                        description={`Are you sure you want to delete "${farm.name}"? This will move it to the recycle bin where it can be restored later.`}
-                        confirmText="Delete Farm"
-                        variant="destructive"
                         onConfirm={() => onDelete(farm)}
+                        title="Delete Farm"
+                        description={`Are you sure you want to delete "${farm.name}"? This action will move it to the recycle bin.`}
                       >
-                        <Button variant="destructive" size="sm">
-                          <Trash2 className="mr-1" size={16} /> Delete
+                        <Button size="sm" variant="outline">
+                          <Trash2 className="mr-1 h-3 w-3" />
+                          Delete
                         </Button>
                       </ConfirmDialog>
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
-    </main>
+    </div>
   );
 };
 
