@@ -18,8 +18,8 @@ import { cn } from "@/lib/utils";
 import { differenceInCalendarDays, format } from "date-fns";
 import { formatIST, nowIST } from "@/lib/time";
 
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/state/AuthContext";
+import { useOfflineStocks } from "@/hooks/useOfflineStocks";
 
 interface StockRecord {
   id: string;
@@ -59,9 +59,10 @@ const Stocks = () => {
   const { accountId } = useAuth();
 
   const [open, setOpen] = useState(false);
-  const [stocks, setStocks] = useState<StockRecord[]>([]);
-  const [rev, setRev] = useState(0);
   const [editingStock, setEditingStock] = useState<StockRecord | null>(null);
+  
+  // Use offline storage
+  const { data: offlineStocks, create, update } = useOfflineStocks();
 
   // Form state
   const [selectedName, setSelectedName] = useState<string>("");
@@ -81,52 +82,28 @@ const Stocks = () => {
     if (!location && locationId) setLocation({ id: locationId, name: locationId });
   }, [location, locationId, setLocation]);
 
-  const load = async () => {
-    if (!locationId || !accountId) return;
-    console.log("Loading stocks for location:", locationId, "account:", accountId);
-    
-    const { data, error } = await supabase
-      .from("stocks")
-      .select("id, name, category, unit, quantity, price_per_unit, total_amount, min_stock, expiry_date, notes, created_at, updated_at")
-      .eq("account_id", accountId)
-      .eq("location_id", locationId)
-      .order("created_at", { ascending: false });
-      
-    if (!error && data) {
-      console.log("Loaded stocks:", data);
-      const mapped: StockRecord[] = (data || []).map((s: any) => ({
+  // Filter stocks for current farm
+  const stocks: StockRecord[] = useMemo(() => {
+    if (!locationId) return [];
+    return offlineStocks
+      .filter(stock => stock.farm_id === locationId)
+      .map((s): StockRecord => ({
         id: s.id,
         name: s.name,
-        category: s.category,
-        unit: s.unit,
+        category: s.category as StockRecord["category"],
+        unit: s.unit as StockRecord["unit"],
         quantity: Number(s.quantity || 0),
         pricePerUnit: Number(s.price_per_unit || 0),
-        totalAmount: Number(s.total_amount || 0),
+        totalAmount: 0, // Calculate from price and quantity
         minStock: Number(s.min_stock || 0),
         expiryDate: s.expiry_date || undefined,
-        notes: s.notes || undefined,
-        createdAt: s.created_at,
-        updatedAt: s.updated_at,
+        notes: s.note || undefined,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       }));
-      setStocks(mapped);
-    } else {
-      console.error("Error loading stocks:", error);
-      if (error) {
-        toast({ 
-          title: "Database Error", 
-          description: "Failed to load stocks. Please refresh the page.", 
-          variant: "destructive" 
-        });
-      }
-    }
-  };
+  }, [offlineStocks, locationId]);
 
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [locationId, rev]);
-
-  const existingNames = useMemo(() => Array.from(new Set(stocks.map(s => s.name))).sort(), [stocks]);
+  const existingNames: string[] = useMemo(() => Array.from(new Set(stocks.map(s => s.name))).sort(), [stocks]);
 
   const handleOpen = (val: boolean) => {
     setOpen(val);
@@ -177,132 +154,35 @@ const Stocks = () => {
 
     try {
       const expiryDateStr = expiry ? format(expiry, "yyyy-MM-dd") : null;
-      const amountDelta = Number(quantity) * Number(pricePerUnit);
 
       if (editingStock) {
-        // For editing: total_amount should be current quantity * current price
-        const totalAmountForAvailableStock = Number(quantity) * Number(pricePerUnit);
-        
-        console.log("Updating stock:", editingStock.id, "with data:", {
+        // Update existing stock
+        await update(editingStock.id, {
           name,
           category,
-          unit,
+          unit: unit,
           quantity,
           price_per_unit: pricePerUnit,
-          total_amount: totalAmountForAvailableStock,
+          min_stock: minStock,
+          expiry_date: expiryDateStr,
+          note: notes || null,
         });
-        
-        // Update existing stock
-        const { data, error: updErr } = await supabase
-          .from("stocks")
-          .update({
-            name,
-            category,
-            unit,
-            quantity,
-            price_per_unit: pricePerUnit,
-            min_stock: minStock,
-            expiry_date: expiryDateStr,
-            notes: notes || null,
-            total_amount: totalAmountForAvailableStock,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", editingStock.id)
-          .eq("account_id", accountId)
-          .select();
-          
-        if (updErr) {
-          console.error("Stock update error:", updErr);
-          throw updErr;
-        }
-        
-        if (!data || data.length === 0) {
-          throw new Error("No stock was updated. Please check if the stock exists and you have permission.");
-        }
-        
-        console.log("Stock updated successfully:", data[0]);
       } else {
-        // Check for existing stock to add to
-        const { data: existing, error: fetchErr } = await supabase
-          .from("stocks")
-          .select("id, quantity, total_amount")
-          .eq("account_id", accountId)
-          .eq("location_id", locationId)
-          .eq("name", name)
-          .eq("unit", unit)
-          .maybeSingle();
-          
-        if (fetchErr) {
-          console.error("Error checking existing stock:", fetchErr);
-          throw fetchErr;
-        }
-
-        if (existing) {
-          console.log("Found existing stock, updating:", existing);
-          const existingQty = Number(existing.quantity || 0);
-          const existingTotal = Number(existing.total_amount || 0);
-          const newQty = existingQty + Number(quantity);
-          
-          // Calculate weighted average price: (existing_qty * existing_avg_price + new_qty * new_price) / total_qty
-          const existingAvgPrice = existingQty > 0 ? existingTotal / existingQty : 0;
-          const weightedAvgPrice = newQty > 0 ? ((existingQty * existingAvgPrice) + (Number(quantity) * Number(pricePerUnit))) / newQty : 0;
-          
-          // Total amount should be for available stock only: final_quantity * weighted_average_price
-          const totalAmountForAvailableStock = newQty * weightedAvgPrice;
-          
-          const { data, error: updErr } = await supabase
-            .from("stocks")
-            .update({
-              quantity: newQty,
-              price_per_unit: weightedAvgPrice, // Use weighted average price
-              min_stock: minStock,
-              expiry_date: expiryDateStr,
-              notes: notes || null,
-              total_amount: totalAmountForAvailableStock, // Total value of available stock
-              category,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", existing.id)
-            .select();
-            
-          if (updErr) {
-            console.error("Error updating existing stock:", updErr);
-            throw updErr;
-          }
-          
-          console.log("Existing stock updated successfully:", data?.[0]);
-        } else {
-          console.log("Creating new stock:", { name, category, unit, quantity });
-          
-          const { data, error: insErr } = await supabase
-            .from("stocks")
-            .insert([{
-              account_id: accountId,
-              location_id: locationId,
-              name,
-              category,
-              unit,
-              quantity,
-              price_per_unit: pricePerUnit,
-              min_stock: minStock,
-              expiry_date: expiryDateStr,
-              notes: notes || null,
-              total_amount: amountDelta,
-            }])
-            .select();
-            
-          if (insErr) {
-            console.error("Stock creation error:", insErr);
-            throw insErr;
-          }
-          
-          console.log("New stock created successfully:", data?.[0]);
-        }
+        // Create new stock
+        await create({
+          account_id: accountId,
+          farm_id: locationId,
+          name,
+          category,
+          unit: unit,
+          quantity,
+          price_per_unit: pricePerUnit,
+          min_stock: minStock,
+          expiry_date: expiryDateStr,
+          note: notes || null,
+        });
       }
 
-      // Force reload stocks to reflect changes
-      await load();
-      setRev((r) => r + 1);
       handleOpen(false);
       toast({ 
         title: editingStock ? "Updated" : "Saved", 
@@ -352,9 +232,9 @@ const Stocks = () => {
                       <SelectValue placeholder="Select existing or choose Other" />
                     </SelectTrigger>
                     <SelectContent className="z-50 bg-popover">
-                      {existingNames.map((n) => (
-                        <SelectItem key={n} value={n}>{n}</SelectItem>
-                      ))}
+                       {existingNames.map((n: string) => (
+                         <SelectItem key={n} value={n}>{n}</SelectItem>
+                       ))}
                       <SelectItem value="__other">Other…</SelectItem>
                     </SelectContent>
                   </Select>
