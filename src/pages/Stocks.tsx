@@ -137,17 +137,25 @@ const Stocks = () => {
   };
 
   const handleSubmit = async () => {
-    if (!locationId || !accountId) return;
+    console.log("Form submission started", { locationId, accountId, quantity, pricePerUnit, minStock, selectedName, otherName, isOther });
+    
+    if (!locationId || !accountId) {
+      console.log("Missing locationId or accountId", { locationId, accountId });
+      return;
+    }
     const name = isOther ? otherName.trim() : selectedName.trim();
     if (!name) {
+      console.log("Missing name", { name, isOther, selectedName, otherName });
       toast({ title: "Missing stock name", description: "Please select or enter a stock name." });
       return;
     }
     if (quantity <= 0) {
+      console.log("Invalid quantity", { quantity, type: typeof quantity });
       toast({ title: "Invalid quantity", description: "Quantity must be greater than zero." });
       return;
     }
     if (pricePerUnit < 0 || minStock < 0) {
+      console.log("Invalid price or min stock", { pricePerUnit, minStock });
       toast({ title: "Invalid values", description: "Price and minimum stock cannot be negative." });
       return;
     }
