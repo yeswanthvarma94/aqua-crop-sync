@@ -44,28 +44,7 @@ export const SyncStatus: React.FC = () => {
     );
   }
 
-  // Show pending sync count
-  if (syncStats.pendingSync > 0) {
-    return (
-      <div className="flex items-center space-x-2">
-        <Badge variant="outline" className="bg-accent/10 text-accent border-accent/30">
-          <Clock className="w-3 h-3 mr-1" />
-          {syncStats.pendingSync} Pending
-        </Badge>
-        {isOnline && (
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={handleManualSync}
-            disabled={isRefreshing}
-            className="h-6 px-2 text-xs"
-          >
-            <RefreshCw className={cn("w-3 h-3", isRefreshing && "animate-spin")} />
-          </Button>
-        )}
-      </div>
-    );
-  }
+  // Don't show pending sync count, always show synced when no errors
 
   // Show synced status
   return (

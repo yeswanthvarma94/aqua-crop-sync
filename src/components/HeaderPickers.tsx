@@ -38,11 +38,11 @@ const HeaderPickers = () => {
   };
 
   return (
-    <div className="w-full flex items-center justify-between gap-4">
-      <div className="flex items-center gap-2 flex-1">
-        <div className="flex-1">
+    <div className="w-full flex items-center justify-between gap-4 px-2">
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        <div className="flex-1 min-w-0">
           <Select value={location?.id} onValueChange={onSelectFarm} disabled={farms.length === 0}>
-            <SelectTrigger className="w-full"><SelectValue placeholder={location?.name || t("headers.selectFarm")} /></SelectTrigger>
+            <SelectTrigger className="w-full min-w-0"><SelectValue placeholder={location?.name || t("headers.selectFarm")} /></SelectTrigger>
             <SelectContent>
               {farms.map((farm) => (
                 <SelectItem key={farm.id} value={farm.id}>{farm.name}</SelectItem>
@@ -50,9 +50,9 @@ const HeaderPickers = () => {
             </SelectContent>
           </Select>
         </div>
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <Select value={tank?.id} onValueChange={onSelectTank} disabled={!location?.id || tanks.length === 0}>
-            <SelectTrigger className="w-full"><SelectValue placeholder={tank?.name || t("headers.selectTank")} /></SelectTrigger>
+            <SelectTrigger className="w-full min-w-0"><SelectValue placeholder={tank?.name || t("headers.selectTank")} /></SelectTrigger>
             <SelectContent>
               {tanks.map((t) => (
                 <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
@@ -63,7 +63,7 @@ const HeaderPickers = () => {
       </div>
       
       {/* Status Indicators */}
-      <div className="flex items-center space-x-3">
+      <div className="flex items-center space-x-2 shrink-0">
         <NetworkStatus />
         <SyncStatus />
       </div>
