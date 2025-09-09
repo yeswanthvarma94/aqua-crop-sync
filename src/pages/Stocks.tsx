@@ -52,7 +52,7 @@ const useSEO = (title: string, description: string) => {
 };
 
 const Stocks = () => {
-  const { locationId } = useParams();
+  const { farmId: locationId } = useParams();
   const navigate = useNavigate();
   const { location, setLocation } = useSelection();
   const { toast } = useToast();
