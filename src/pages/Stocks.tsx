@@ -189,6 +189,27 @@ const Stocks = () => {
       return;
     }
 
+    // Check for duplicate stock (only when creating new stock, not editing)
+    if (!editingStock) {
+      const existingStock = stocks.find(s => 
+        s.name.toLowerCase() === name.toLowerCase() && 
+        s.unit === unit
+      );
+      
+      if (existingStock) {
+        console.log("Duplicate stock detected", { 
+          existingStock: existingStock.name, 
+          newName: name, 
+          unit 
+        });
+        toast({ 
+          title: "Duplicate Stock", 
+          description: `A stock named "${name}" with unit "${unit}" already exists. Please use a different name or edit the existing stock.`,
+          variant: "destructive"
+        });
+        return;
+      }
+    }
     try {
       const expiryDateStr = expiry ? format(expiry, "yyyy-MM-dd") : null;
       
