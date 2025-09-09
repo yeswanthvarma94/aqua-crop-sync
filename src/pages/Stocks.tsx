@@ -97,7 +97,7 @@ const Stocks = () => {
         totalAmount: 0, // Calculate from price and quantity
         minStock: Number(s.min_stock || 0),
         expiryDate: s.expiry_date || undefined,
-        notes: s.note || undefined,
+        notes: s.notes || undefined,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       }));
@@ -202,7 +202,7 @@ const Stocks = () => {
         price_per_unit: numPricePerUnit,
         min_stock: numMinStock,
         expiry_date: expiryDateStr,
-        note: notes || null,
+        notes: notes || null,
       };
 
       console.log("Stock data to be saved:", stockData);
@@ -217,7 +217,7 @@ const Stocks = () => {
           price_per_unit: numPricePerUnit,
           min_stock: numMinStock,
           expiry_date: expiryDateStr,
-          note: notes || null,
+          notes: notes || null,
         });
       } else {
         console.log("Creating new stock");

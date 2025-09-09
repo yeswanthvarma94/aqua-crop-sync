@@ -39,7 +39,7 @@ export interface OfflineStock extends OfflineRecord {
   unit?: string;
   category?: string;
   expiry_date?: string;
-  note?: string;
+  notes?: string;
 }
 
 export interface OfflineFeedingLog extends OfflineRecord {
