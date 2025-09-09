@@ -30,6 +30,8 @@ export const useOfflineStorage = <T extends OfflineRecord>(
 
   // Create record offline-first
   const create = async (record: Omit<T, keyof OfflineRecord>) => {
+    console.log(`Creating ${tableName} record:`, record);
+    
     const id = crypto.randomUUID();
     const timestamp = Date.now();
     
@@ -40,14 +42,19 @@ export const useOfflineStorage = <T extends OfflineRecord>(
       lastModified: timestamp
     } as T;
 
+    console.log(`Offline record to be saved:`, offlineRecord);
+
     try {
       await table.add(offlineRecord);
+      console.log(`Successfully added to local ${tableName} table`);
       
       // Add to sync queue
       await syncService.addToQueue('create', tableName as string, offlineRecord);
+      console.log(`Successfully added to sync queue`);
       
       // Trigger immediate sync if online
       if (isOnline) {
+        console.log(`Triggering immediate sync for ${tableName}`);
         syncService.processQueue();
       }
 
@@ -58,7 +65,15 @@ export const useOfflineStorage = <T extends OfflineRecord>(
 
       return offlineRecord;
     } catch (error) {
-      console.error(`Failed to create ${tableName}:`, error);
+      console.error(`Failed to create ${tableName} record:`, error);
+      console.error('Record that failed:', record);
+      console.error('Offline record that failed:', offlineRecord);
+      
+      toast({
+        title: "Error",
+        description: `Failed to save ${tableName.slice(0, -1)}. Please try again.`,
+        variant: "destructive"
+      });
       throw error;
     }
   };

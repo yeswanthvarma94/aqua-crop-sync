@@ -137,67 +137,121 @@ const Stocks = () => {
   };
 
   const handleSubmit = async () => {
-    console.log("Form submission started", { locationId, accountId, quantity, pricePerUnit, minStock, selectedName, otherName, isOther });
+    console.log("Form submission started", { 
+      locationId, 
+      accountId, 
+      quantity, 
+      pricePerUnit, 
+      minStock, 
+      selectedName, 
+      otherName, 
+      isOther,
+      types: {
+        quantity: typeof quantity,
+        pricePerUnit: typeof pricePerUnit,
+        minStock: typeof minStock
+      }
+    });
     
     if (!locationId || !accountId) {
       console.log("Missing locationId or accountId", { locationId, accountId });
+      toast({ title: "Error", description: "Missing farm or account information." });
       return;
     }
+    
     const name = isOther ? otherName.trim() : selectedName.trim();
     if (!name) {
       console.log("Missing name", { name, isOther, selectedName, otherName });
       toast({ title: "Missing stock name", description: "Please select or enter a stock name." });
       return;
     }
-    if (quantity <= 0) {
-      console.log("Invalid quantity", { quantity, type: typeof quantity });
-      toast({ title: "Invalid quantity", description: "Quantity must be greater than zero." });
+    
+    // Ensure all numeric values are valid numbers
+    const numQuantity = Number(quantity);
+    const numPricePerUnit = Number(pricePerUnit);
+    const numMinStock = Number(minStock);
+    
+    if (isNaN(numQuantity) || numQuantity <= 0) {
+      console.log("Invalid quantity", { quantity, numQuantity, isNaN: isNaN(numQuantity) });
+      toast({ title: "Invalid quantity", description: "Quantity must be a valid number greater than zero." });
       return;
     }
-    if (pricePerUnit < 0 || minStock < 0) {
-      console.log("Invalid price or min stock", { pricePerUnit, minStock });
-      toast({ title: "Invalid values", description: "Price and minimum stock cannot be negative." });
+    
+    if (isNaN(numPricePerUnit) || numPricePerUnit < 0) {
+      console.log("Invalid price per unit", { pricePerUnit, numPricePerUnit, isNaN: isNaN(numPricePerUnit) });
+      toast({ title: "Invalid price", description: "Price per unit must be a valid positive number." });
+      return;
+    }
+    
+    if (isNaN(numMinStock) || numMinStock < 0) {
+      console.log("Invalid min stock", { minStock, numMinStock, isNaN: isNaN(numMinStock) });
+      toast({ title: "Invalid minimum stock", description: "Minimum stock must be a valid positive number." });
       return;
     }
 
     try {
       const expiryDateStr = expiry ? format(expiry, "yyyy-MM-dd") : null;
+      
+      const stockData = {
+        account_id: accountId,
+        farm_id: locationId,
+        name,
+        category,
+        unit: unit,
+        quantity: numQuantity,
+        price_per_unit: numPricePerUnit,
+        min_stock: numMinStock,
+        expiry_date: expiryDateStr,
+        note: notes || null,
+      };
+
+      console.log("Stock data to be saved:", stockData);
 
       if (editingStock) {
-        // Update existing stock
+        console.log("Updating stock with ID:", editingStock.id);
         await update(editingStock.id, {
           name,
           category,
           unit: unit,
-          quantity,
-          price_per_unit: pricePerUnit,
-          min_stock: minStock,
+          quantity: numQuantity,
+          price_per_unit: numPricePerUnit,
+          min_stock: numMinStock,
           expiry_date: expiryDateStr,
           note: notes || null,
         });
       } else {
-        // Create new stock
-        await create({
-          account_id: accountId,
-          farm_id: locationId,
-          name,
-          category,
-          unit: unit,
-          quantity,
-          price_per_unit: pricePerUnit,
-          min_stock: minStock,
-          expiry_date: expiryDateStr,
-          note: notes || null,
-        });
+        console.log("Creating new stock");
+        await create(stockData);
       }
 
+      console.log("Stock operation completed successfully");
       handleOpen(false);
+      
+      // Reset form
+      setSelectedName("");
+      setOtherName("");
+      setIsOther(false);
+      setCategory("feed");
+      setUnit("kg");
+      setQuantity(0);
+      setPricePerUnit(0);
+      setMinStock(0);
+      setExpiry(undefined);
+      setNotes("");
+      setEditingStock(null);
+      
       toast({ 
-        title: editingStock ? "Updated" : "Saved", 
-        description: `${name} — ${quantity} ${unit}` 
+        title: editingStock ? "Stock Updated" : "Stock Added", 
+        description: `${name} — ${numQuantity} ${unit}${editingStock ? " updated" : " added"} successfully.` 
       });
     } catch (e: any) {
       console.error(`Failed to ${editingStock ? "update" : "save"} stock:`, e);
+      console.error("Error details:", {
+        message: e?.message,
+        stack: e?.stack,
+        cause: e?.cause
+      });
+      
       const errorMsg = e?.message || `Failed to ${editingStock ? "update" : "save"} stock. Please try again.`;
       toast({ 
         title: "Error", 
@@ -270,7 +324,7 @@ const Stocks = () => {
                   <div className="grid gap-2">
                     <Label>Quantity</Label>
                     <Input type="number" inputMode="decimal" min={0} step="any" value={quantity}
-                      onChange={(e) => setQuantity(Number(e.target.value))} />
+                      onChange={(e) => setQuantity(e.target.value ? Number(e.target.value) : 0)} />
                   </div>
                   <div className="grid gap-2">
                     <Label>Units</Label>
@@ -292,12 +346,12 @@ const Stocks = () => {
                   <div className="grid gap-2">
                     <Label>Price per unit (INR)</Label>
                     <Input type="number" inputMode="decimal" min={0} step="any" value={pricePerUnit}
-                      onChange={(e) => setPricePerUnit(Number(e.target.value))} />
+                      onChange={(e) => setPricePerUnit(e.target.value ? Number(e.target.value) : 0)} />
                   </div>
                   <div className="grid gap-2">
                     <Label>Min stock alert</Label>
                     <Input type="number" inputMode="decimal" min={0} step="any" value={minStock}
-                      onChange={(e) => setMinStock(Number(e.target.value))} />
+                      onChange={(e) => setMinStock(e.target.value ? Number(e.target.value) : 0)} />
                   </div>
                 </div>
 

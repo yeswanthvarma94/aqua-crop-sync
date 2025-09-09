@@ -77,7 +77,11 @@ export class SyncService {
   }
 
   private async handleCreate(table: string, data: any): Promise<void> {
+    console.log(`SyncService: Creating ${table} record:`, data);
+    
     const { syncStatus, lastModified, ...cleanData } = data;
+    
+    console.log(`SyncService: Clean data for ${table}:`, cleanData);
     
     const { data: result, error } = await supabase
       .from(table)
@@ -85,7 +89,12 @@ export class SyncService {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error(`SyncService: Failed to create ${table} in Supabase:`, error);
+      throw error;
+    }
+
+    console.log(`SyncService: Successfully created ${table} in Supabase:`, result);
 
     // Update local record with server ID and mark as synced
     const localTable = this.getLocalTable(table);
@@ -94,6 +103,8 @@ export class SyncService {
       syncStatus: 'synced' as const,
       lastModified: Date.now()
     });
+    
+    console.log(`SyncService: Updated local ${table} record as synced`);
   }
 
   private async handleUpdate(table: string, data: any): Promise<void> {
