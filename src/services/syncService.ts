@@ -83,6 +83,29 @@ export class SyncService {
     
     console.log(`SyncService: Clean data for ${table}:`, cleanData);
     
+    // Additional validation for stocks table
+    if (table === 'stocks') {
+      if (!cleanData.account_id || !cleanData.name) {
+        throw new Error('Missing required fields for stock creation');
+      }
+      
+      // Ensure numeric fields are properly formatted
+      if (cleanData.quantity !== undefined) {
+        cleanData.quantity = Number(cleanData.quantity);
+      }
+      if (cleanData.price_per_unit !== undefined) {
+        cleanData.price_per_unit = Number(cleanData.price_per_unit);
+      }
+      if (cleanData.total_amount !== undefined) {
+        cleanData.total_amount = Number(cleanData.total_amount);
+      }
+      if (cleanData.min_stock !== undefined) {
+        cleanData.min_stock = Number(cleanData.min_stock);
+      }
+      
+      console.log(`SyncService: Validated stock data:`, cleanData);
+    }
+    
     const { data: result, error } = await supabase
       .from(table)
       .insert(cleanData)
@@ -91,6 +114,12 @@ export class SyncService {
 
     if (error) {
       console.error(`SyncService: Failed to create ${table} in Supabase:`, error);
+      console.error(`SyncService: Error details:`, {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
+      });
       throw error;
     }
 

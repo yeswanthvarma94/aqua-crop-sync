@@ -94,7 +94,7 @@ const Stocks = () => {
         unit: s.unit as StockRecord["unit"],
         quantity: Number(s.quantity || 0),
         pricePerUnit: Number(s.price_per_unit || 0),
-        totalAmount: 0, // Calculate from price and quantity
+        totalAmount: Number(s.total_amount || 0),
         minStock: Number(s.min_stock || 0),
         expiryDate: s.expiry_date || undefined,
         notes: s.notes || undefined,
@@ -189,7 +189,9 @@ const Stocks = () => {
       return;
     }
 
-    // Check for duplicate stock (only when creating new stock, not editing)
+    const expiryDateStr = expiry ? format(expiry, "yyyy-MM-dd") : null;
+
+    // Check for duplicate stock and offer to add to existing (only when creating new stock, not editing)
     if (!editingStock) {
       const existingStock = stocks.find(s => 
         s.name.toLowerCase() === name.toLowerCase() && 
@@ -197,21 +199,55 @@ const Stocks = () => {
       );
       
       if (existingStock) {
-        console.log("Duplicate stock detected", { 
+        console.log("Duplicate stock detected - adding to existing", { 
           existingStock: existingStock.name, 
           newName: name, 
-          unit 
+          unit,
+          existingQuantity: existingStock.quantity,
+          addingQuantity: numQuantity
         });
-        toast({ 
-          title: "Duplicate Stock", 
-          description: `A stock named "${name}" with unit "${unit}" already exists. Please use a different name or edit the existing stock.`,
-          variant: "destructive"
-        });
-        return;
+        
+        // Calculate weighted average price and new total amount
+        const existingTotal = existingStock.totalAmount;
+        const newItemTotal = numQuantity * numPricePerUnit;
+        const newQuantity = existingStock.quantity + numQuantity;
+        const newTotalAmount = existingTotal + newItemTotal;
+        const newWeightedPrice = newTotalAmount / newQuantity;
+        
+        try {
+          await update(existingStock.id, {
+            quantity: newQuantity,
+            price_per_unit: newWeightedPrice,
+            total_amount: newTotalAmount,
+            min_stock: Math.max(existingStock.minStock, numMinStock),
+            expiry_date: expiryDateStr || existingStock.expiryDate,
+            notes: notes ? `${existingStock.notes || ''}\n${notes}`.trim() : existingStock.notes,
+          });
+          
+          handleOpen(false);
+          setSelectedName(""); setOtherName(""); setIsOther(false);
+          setCategory("feed"); setUnit("kg"); setQuantity(0);
+          setPricePerUnit(0); setMinStock(0); setExpiry(undefined); setNotes("");
+          
+          toast({ 
+            title: "Stock Updated", 
+            description: `Added ${numQuantity} ${unit} to existing ${name}. New quantity: ${newQuantity} ${unit}` 
+          });
+          return;
+        } catch (e: any) {
+          console.error("Failed to update existing stock:", e);
+          toast({ 
+            title: "Error", 
+            description: "Failed to add to existing stock. Please try again.", 
+            variant: "destructive" 
+          });
+          return;
+        }
       }
     }
+
     try {
-      const expiryDateStr = expiry ? format(expiry, "yyyy-MM-dd") : null;
+      const totalAmount = numQuantity * numPricePerUnit;
       
       const stockData = {
         account_id: accountId,
@@ -221,6 +257,7 @@ const Stocks = () => {
         unit: unit,
         quantity: numQuantity,
         price_per_unit: numPricePerUnit,
+        total_amount: totalAmount,
         min_stock: numMinStock,
         expiry_date: expiryDateStr,
         notes: notes || null,
@@ -230,12 +267,14 @@ const Stocks = () => {
 
       if (editingStock) {
         console.log("Updating stock with ID:", editingStock.id);
+        const editTotalAmount = numQuantity * numPricePerUnit;
         await update(editingStock.id, {
           name,
           category,
           unit: unit,
           quantity: numQuantity,
           price_per_unit: numPricePerUnit,
+          total_amount: editTotalAmount,
           min_stock: numMinStock,
           expiry_date: expiryDateStr,
           notes: notes || null,
