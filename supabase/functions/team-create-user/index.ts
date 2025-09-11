@@ -10,9 +10,9 @@ const corsHeaders = {
 interface CreateUserReq {
   accountId: string;
   username: string; // Phone number
-  password: string;
   role: "manager" | "partner";
   name: string; // Full name of the user
+  otpToken?: string; // OTP token for verification
 }
 
 serve(async (req) => {
@@ -20,9 +20,9 @@ serve(async (req) => {
 
   try {
     const body: CreateUserReq = await req.json();
-    const { accountId, username, password, role, name } = body || {} as any;
+    const { accountId, username, role, name, otpToken } = body || {} as any;
 
-    if (!accountId || !username || !password || !role || !name) {
+    if (!accountId || !username || !role || !name) {
       return new Response(JSON.stringify({ error: "Missing fields" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
@@ -86,10 +86,30 @@ serve(async (req) => {
     // Service client for admin auth operations
     const adminClient = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
-    // Create user with phone number
+    // If OTP token is provided, verify it first
+    if (otpToken) {
+      try {
+        const { data: verifyData, error: verifyErr } = await adminClient.auth.verifyOtp({
+          phone: phoneNumber,
+          token: otpToken,
+          type: 'sms'
+        });
+        
+        if (verifyErr) {
+          return new Response(JSON.stringify({ error: "Invalid OTP: " + verifyErr.message }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
+        }
+      } catch (otpErr: any) {
+        return new Response(JSON.stringify({ error: "OTP verification failed: " + otpErr.message }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
+      }
+    }
+
+    // Generate a secure temporary password for the user
+    const tempPassword = crypto.randomUUID().substring(0, 12) + "!Aa1";
+
+    // Create user with phone number and temporary password
     const { data: created, error: createErr } = await adminClient.auth.admin.createUser({
       phone: phoneNumber,
-      password,
+      password: tempPassword,
       phone_confirm: true,
       user_metadata: { username: phoneNumber, name: String(name).trim() },
     });
@@ -127,7 +147,27 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: mapErr.message }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
-    return new Response(JSON.stringify({ ok: true, userId: newUserId, username: phoneNumber, name: String(name).trim(), role }), {
+    // Send OTP to the new user for initial login setup
+    try {
+      await adminClient.auth.signInWithOtp({
+        phone: phoneNumber,
+        options: {
+          shouldCreateUser: false
+        }
+      });
+    } catch (otpErr) {
+      // Don't fail if OTP sending fails, but log it
+      console.log("Failed to send setup OTP:", otpErr);
+    }
+
+    return new Response(JSON.stringify({ 
+      ok: true, 
+      userId: newUserId, 
+      username: phoneNumber, 
+      name: String(name).trim(), 
+      role,
+      message: "Team member created successfully. They will receive an OTP for initial login setup."
+    }), {
       status: 200,
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });

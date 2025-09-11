@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from "@/components/ui/input-otp";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
@@ -123,7 +124,9 @@ const Settings = () => {
   const [username, setUsername] = useState("");
   const [memberName, setMemberName] = useState("");
   const [role, setRole] = useState<UserRole>("manager");
-  const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [pendingMemberData, setPendingMemberData] = useState<{phoneNumber: string, name: string, role: UserRole} | null>(null);
 
   const isOwner = user?.role === "owner";
   const canManageTeam = isOwner && plan === "Enterprise";
@@ -159,12 +162,12 @@ const Settings = () => {
 
   useEffect(() => { refreshTeam(); }, [accountId]);
 
-  const handleAddUser = async () => {
+  const sendMemberOtp = async () => {
     const phoneNumber = username.trim();
     const name = memberName.trim();
     
-    if (!phoneNumber || !password || !name) { 
-      toast({ title: "Missing fields", description: "Enter phone number, name, and password." }); 
+    if (!phoneNumber || !name) { 
+      toast({ title: "Missing fields", description: "Enter phone number and name." }); 
       return; 
     }
     
@@ -177,34 +180,84 @@ const Settings = () => {
     if (!accountId) { toast({ title: "No account", description: "Account not ready." }); return; }
     
     try {
-      const { data, error } = await supabase.functions.invoke("team-create-user", {
-        body: { accountId, username: phoneNumber, password, role, name },
+      // Store member data for later use
+      setPendingMemberData({ phoneNumber, name, role });
+      
+      // Send OTP for role assignment
+      const { error } = await supabase.auth.signInWithOtp({
+        phone: phoneNumber,
+        options: {
+          shouldCreateUser: false // Don't create user yet, just send OTP
+        }
       });
+      
       if (error) throw error;
       
-      setAddOpen(false); 
-      setUsername(""); 
-      setMemberName("");
-      setPassword(""); 
-      setRole("manager");
-      
-      await refreshTeam();
-      toast({ title: "Member added", description: `${name} added as ${role}` });
+      setOtpSent(true);
+      toast({ title: "OTP Sent", description: `OTP sent to ${phoneNumber} for role assignment verification.` });
     } catch (e: any) {
-      toast({ title: "Failed to add", description: e.message || "Error" });
+      toast({ title: "Failed to send OTP", description: e.message || "Error" });
     }
   };
 
+  const verifyMemberOtp = async () => {
+    if (!otp.trim()) {
+      toast({ title: "Missing OTP", description: "Please enter the 6-digit OTP." });
+      return;
+    }
+    
+    if (!pendingMemberData || !accountId) {
+      toast({ title: "Error", description: "Member data not found." });
+      return;
+    }
+
+    try {
+      const { phoneNumber, name, role: memberRole } = pendingMemberData;
+      
+      // Create the team member with OTP verification
+      const { data, error } = await supabase.functions.invoke("team-create-user", {
+        body: { 
+          accountId, 
+          username: phoneNumber, 
+          role: memberRole, 
+          name,
+          otpToken: otp
+        },
+      });
+      if (error) throw error;
+      
+      // Reset form
+      setAddOpen(false); 
+      setUsername(""); 
+      setMemberName("");
+      setRole("manager");
+      setOtp("");
+      setOtpSent(false);
+      setPendingMemberData(null);
+      
+      await refreshTeam();
+      toast({ title: "Member added", description: `${name} added as ${memberRole} with OTP verification.` });
+    } catch (e: any) {
+      toast({ title: "Failed to add member", description: e.message || "Error" });
+    }
+  };
+
+  const resetMemberForm = () => {
+    setOtpSent(false);
+    setOtp("");
+    setPendingMemberData(null);
+  };
+
   const handleResetPassword = async () => {
-    if (!resetTarget || !password) return;
+    if (!resetTarget) return;
     if (!accountId) return;
     try {
       const { error } = await supabase.functions.invoke("team-reset-password", {
-        body: { accountId, username: resetTarget.username, newPassword: password },
+        body: { accountId, username: resetTarget.username },
       } as any);
       if (error) throw error;
-      setResetTarget(null); setPassword("");
-      toast({ title: "Password updated", description: `Password reset for ${resetTarget.username}` });
+      setResetTarget(null);
+      toast({ title: "Reset initiated", description: `OTP sent to ${resetTarget.username} for password reset` });
     } catch (e: any) {
       toast({ title: "Failed to reset", description: e.message || "Error" });
     }
@@ -391,7 +444,18 @@ const Settings = () => {
               <>
                 <div className="flex items-center justify-between">
                   <h4 className="font-medium">Members</h4>
-                  <Dialog open={addOpen} onOpenChange={setAddOpen}>
+                  <Dialog open={addOpen} onOpenChange={(open) => {
+                    setAddOpen(open);
+                    if (!open) {
+                      // Reset form when dialog closes
+                      setUsername("");
+                      setMemberName("");
+                      setRole("manager");
+                      setOtp("");
+                      setOtpSent(false);
+                      setPendingMemberData(null);
+                    }
+                  }}>
                     <DialogTrigger asChild>
                       <Button size="sm">Add member</Button>
                     </DialogTrigger>
@@ -428,13 +492,48 @@ const Settings = () => {
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="grid gap-2">
-                          <Label>Temporary password</Label>
-                          <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
-                        </div>
+                        {otpSent && (
+                          <div className="grid gap-2">
+                            <Label>Enter OTP</Label>
+                            <p className="text-sm text-muted-foreground">
+                              Enter the 6-digit OTP sent to {pendingMemberData?.phoneNumber} for role assignment verification.
+                            </p>
+                            <InputOTP 
+                              maxLength={6}
+                              value={otp} 
+                              onChange={setOtp}
+                              onComplete={(value) => {
+                                setOtp(value);
+                              }}
+                            >
+                              <InputOTPGroup>
+                                <InputOTPSlot index={0} />
+                                <InputOTPSlot index={1} />
+                                <InputOTPSlot index={2} />
+                              </InputOTPGroup>
+                              <InputOTPSeparator />
+                              <InputOTPGroup>
+                                <InputOTPSlot index={3} />
+                                <InputOTPSlot index={4} />
+                                <InputOTPSlot index={5} />
+                              </InputOTPGroup>
+                            </InputOTP>
+                          </div>
+                        )}
                       </div>
                       <DialogFooter>
-                        <Button onClick={handleAddUser}>Create</Button>
+                        {!otpSent ? (
+                          <Button onClick={sendMemberOtp}>Send OTP</Button>
+                        ) : (
+                          <div className="flex gap-2">
+                            <Button variant="outline" onClick={resetMemberForm}>
+                              Change Number
+                            </Button>
+                            <Button onClick={verifyMemberOtp} disabled={otp.length !== 6}>
+                              Verify & Create
+                            </Button>
+                          </div>
+                        )}
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
@@ -464,22 +563,21 @@ const Settings = () => {
                             <TableCell className="text-right space-x-2">
                               <Dialog
                                 open={resetTarget?.user_id === m.user_id}
-                                onOpenChange={(v) => { if (!v) { setResetTarget(null); setPassword(""); } }}
+                                onOpenChange={(v) => { if (!v) { setResetTarget(null); } }}
                               >
                                 <DialogTrigger asChild>
                                   <Button size="sm" variant="secondary" onClick={() => setResetTarget(m)}>Reset Password</Button>
                                 </DialogTrigger>
-                                <DialogContent className="sm:max-w-[420px]">
-                                  <DialogHeader>
-                                    <DialogTitle>Reset password — {m.username}</DialogTitle>
-                                  </DialogHeader>
-                                  <div className="grid gap-2">
-                                    <Label>New password</Label>
-                                    <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
-                                  </div>
-                                  <DialogFooter>
-                                    <Button onClick={handleResetPassword}>Update</Button>
-                                  </DialogFooter>
+                                  <DialogContent className="sm:max-w-[420px]">
+                                    <DialogHeader>
+                                      <DialogTitle>Reset password — {m.username}</DialogTitle>
+                                    </DialogHeader>
+                                    <div className="text-sm text-muted-foreground">
+                                      An OTP will be sent to {m.username} to reset their password.
+                                    </div>
+                                    <DialogFooter>
+                                      <Button onClick={handleResetPassword}>Send Reset OTP</Button>
+                                    </DialogFooter>
                                 </DialogContent>
                               </Dialog>
                               <Button size="sm" variant="destructive" onClick={() => handleDeleteUser(m.user_id)}>Delete</Button>

@@ -10,15 +10,14 @@ const corsHeaders = {
 interface ResetReq {
   accountId: string;
   username: string;
-  newPassword: string;
 }
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { accountId, username, newPassword }: ResetReq = await req.json();
-    if (!accountId || !username || !newPassword) {
+    const { accountId, username }: ResetReq = await req.json();
+    if (!accountId || !username) {
       return new Response(JSON.stringify({ error: "Missing fields" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
@@ -57,12 +56,26 @@ serve(async (req) => {
     }
 
     const adminClient = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
-    const { error: updErr } = await adminClient.auth.admin.updateUserById(mapping.user_id, { password: newPassword });
-    if (updErr) {
-      return new Response(JSON.stringify({ error: updErr.message }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
+    
+    // Send password reset OTP to the user's phone number
+    const { error: otpErr } = await adminClient.auth.signInWithOtp({
+      phone: username,
+      options: {
+        shouldCreateUser: false
+      }
+    });
+    
+    if (otpErr) {
+      return new Response(JSON.stringify({ error: "Failed to send reset OTP: " + otpErr.message }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
-    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } });
+    return new Response(JSON.stringify({ 
+      ok: true, 
+      message: `Password reset OTP sent to ${username}` 
+    }), { 
+      status: 200, 
+      headers: { "Content-Type": "application/json", ...corsHeaders } 
+    });
   } catch (err: any) {
     console.error("team-reset-password error", err);
     return new Response(JSON.stringify({ error: err?.message || "Unexpected error" }), { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } });
