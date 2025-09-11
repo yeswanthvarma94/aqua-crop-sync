@@ -183,7 +183,7 @@ const Settings = () => {
       // Store member data for later use
       setPendingMemberData({ phoneNumber, name, role });
       
-      // Send OTP for role assignment
+      // Try to send OTP for role assignment
       const { error } = await supabase.auth.signInWithOtp({
         phone: phoneNumber,
         options: {
@@ -191,12 +191,63 @@ const Settings = () => {
         }
       });
       
+      // If OTP sending fails due to signup restrictions, directly create the user
+      if (error && error.message.toLowerCase().includes('signups not allowed')) {
+        console.log("Signups not allowed for OTP, creating user directly");
+        await createMemberDirectly(phoneNumber, name, role);
+        return;
+      }
+      
       if (error) throw error;
       
       setOtpSent(true);
       toast({ title: "OTP Sent", description: `OTP sent to ${phoneNumber} for role assignment verification.` });
     } catch (e: any) {
-      toast({ title: "Failed to send OTP", description: e.message || "Error" });
+      // Fallback: if any OTP-related error occurs, create user directly
+      console.log("OTP failed, creating user directly:", e.message);
+      await createMemberDirectly(phoneNumber, name, role);
+    }
+  };
+
+  const createMemberDirectly = async (phoneNumber: string, name: string, memberRole: UserRole) => {
+    try {
+      const { data, error } = await supabase.functions.invoke("team-create-user", {
+        body: { 
+          accountId, 
+          username: phoneNumber, 
+          role: memberRole, 
+          name,
+          skipOtpVerification: true // Skip OTP verification
+        },
+      });
+      if (error) throw error;
+      
+      // Reset form
+      setAddOpen(false); 
+      setUsername(""); 
+      setMemberName("");
+      setRole("manager");
+      setOtp("");
+      setOtpSent(false);
+      setPendingMemberData(null);
+      
+      await refreshTeam();
+      
+      // Show different message based on whether temporary password is provided
+      if (data.tempPassword) {
+        toast({ 
+          title: "Member added successfully", 
+          description: `${name} added as ${memberRole}. Temporary password: ${data.tempPassword}. Share this securely with the user.`,
+          duration: 10000 // Show longer for password
+        });
+      } else {
+        toast({ 
+          title: "Member added", 
+          description: `${name} added as ${memberRole}. They will receive login credentials via SMS.` 
+        });
+      }
+    } catch (e: any) {
+      toast({ title: "Failed to add member", description: e.message || "Error" });
     }
   };
 

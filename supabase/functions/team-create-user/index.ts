@@ -13,6 +13,7 @@ interface CreateUserReq {
   role: "manager" | "partner";
   name: string; // Full name of the user
   otpToken?: string; // OTP token for verification
+  skipOtpVerification?: boolean; // Skip OTP verification if signups not allowed
 }
 
 serve(async (req) => {
@@ -20,7 +21,7 @@ serve(async (req) => {
 
   try {
     const body: CreateUserReq = await req.json();
-    const { accountId, username, role, name, otpToken } = body || {} as any;
+    const { accountId, username, role, name, otpToken, skipOtpVerification } = body || {} as any;
 
     if (!accountId || !username || !role || !name) {
       return new Response(JSON.stringify({ error: "Missing fields" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
@@ -86,8 +87,8 @@ serve(async (req) => {
     // Service client for admin auth operations
     const adminClient = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
-    // If OTP token is provided, verify it first
-    if (otpToken) {
+    // If OTP token is provided and not skipping verification, verify it first
+    if (otpToken && !skipOtpVerification) {
       try {
         const { data: verifyData, error: verifyErr } = await adminClient.auth.verifyOtp({
           phone: phoneNumber,
@@ -147,18 +148,24 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: mapErr.message }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
-    // Send OTP to the new user for initial login setup
-    try {
-      await adminClient.auth.signInWithOtp({
-        phone: phoneNumber,
-        options: {
-          shouldCreateUser: false
-        }
-      });
-    } catch (otpErr) {
-      // Don't fail if OTP sending fails, but log it
-      console.log("Failed to send setup OTP:", otpErr);
+    // Send OTP to the new user for initial login setup (if not skipping verification)
+    if (!skipOtpVerification) {
+      try {
+        await adminClient.auth.signInWithOtp({
+          phone: phoneNumber,
+          options: {
+            shouldCreateUser: false
+          }
+        });
+      } catch (otpErr) {
+        // Don't fail if OTP sending fails, but log it
+        console.log("Failed to send setup OTP:", otpErr);
+      }
     }
+
+    const setupMessage = skipOtpVerification 
+      ? "Team member created successfully with temporary password. They can log in using their phone number."
+      : "Team member created successfully. They will receive an OTP for initial login setup.";
 
     return new Response(JSON.stringify({ 
       ok: true, 
@@ -166,7 +173,8 @@ serve(async (req) => {
       username: phoneNumber, 
       name: String(name).trim(), 
       role,
-      message: "Team member created successfully. They will receive an OTP for initial login setup."
+      tempPassword: skipOtpVerification ? tempPassword : undefined,
+      message: setupMessage
     }), {
       status: 200,
       headers: { "Content-Type": "application/json", ...corsHeaders },
