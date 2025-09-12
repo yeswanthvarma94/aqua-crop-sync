@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from "@/components/ui/input-otp";
+
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
@@ -124,9 +124,6 @@ const Settings = () => {
   const [username, setUsername] = useState("");
   const [memberName, setMemberName] = useState("");
   const [role, setRole] = useState<UserRole>("manager");
-  const [otp, setOtp] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
-  const [pendingMemberData, setPendingMemberData] = useState<{phoneNumber: string, name: string, role: UserRole} | null>(null);
 
   const isOwner = user?.role === "owner";
   const canManageTeam = isOwner && plan === "Enterprise";
@@ -162,7 +159,7 @@ const Settings = () => {
 
   useEffect(() => { refreshTeam(); }, [accountId]);
 
-  const sendMemberOtp = async () => {
+  const createMember = async () => {
     const phoneNumber = username.trim();
     const name = memberName.trim();
     
@@ -179,34 +176,7 @@ const Settings = () => {
     
     if (!accountId) { toast({ title: "No account", description: "Account not ready." }); return; }
     
-    try {
-      // Store member data for later use
-      setPendingMemberData({ phoneNumber, name, role });
-      
-      // Try to send OTP for role assignment
-      const { error } = await supabase.auth.signInWithOtp({
-        phone: phoneNumber,
-        options: {
-          shouldCreateUser: false // Don't create user yet, just send OTP
-        }
-      });
-      
-      // If OTP sending fails due to signup restrictions, directly create the user
-      if (error && error.message.toLowerCase().includes('signups not allowed')) {
-        console.log("Signups not allowed for OTP, creating user directly");
-        await createMemberDirectly(phoneNumber, name, role);
-        return;
-      }
-      
-      if (error) throw error;
-      
-      setOtpSent(true);
-      toast({ title: "OTP Sent", description: `OTP sent to ${phoneNumber} for role assignment verification.` });
-    } catch (e: any) {
-      // Fallback: if any OTP-related error occurs, create user directly
-      console.log("OTP failed, creating user directly:", e.message);
-      await createMemberDirectly(phoneNumber, name, role);
-    }
+    await createMemberDirectly(phoneNumber, name, role);
   };
 
   const createMemberDirectly = async (phoneNumber: string, name: string, memberRole: UserRole) => {
@@ -227,9 +197,6 @@ const Settings = () => {
       setUsername(""); 
       setMemberName("");
       setRole("manager");
-      setOtp("");
-      setOtpSent(false);
-      setPendingMemberData(null);
       
       await refreshTeam();
       
@@ -251,53 +218,6 @@ const Settings = () => {
     }
   };
 
-  const verifyMemberOtp = async () => {
-    if (!otp.trim()) {
-      toast({ title: "Missing OTP", description: "Please enter the 6-digit OTP." });
-      return;
-    }
-    
-    if (!pendingMemberData || !accountId) {
-      toast({ title: "Error", description: "Member data not found." });
-      return;
-    }
-
-    try {
-      const { phoneNumber, name, role: memberRole } = pendingMemberData;
-      
-      // Create the team member with OTP verification
-      const { data, error } = await supabase.functions.invoke("team-create-user", {
-        body: { 
-          accountId, 
-          username: phoneNumber, 
-          role: memberRole, 
-          name,
-          otpToken: otp
-        },
-      });
-      if (error) throw error;
-      
-      // Reset form
-      setAddOpen(false); 
-      setUsername(""); 
-      setMemberName("");
-      setRole("manager");
-      setOtp("");
-      setOtpSent(false);
-      setPendingMemberData(null);
-      
-      await refreshTeam();
-      toast({ title: "Member added", description: `${name} added as ${memberRole} with OTP verification.` });
-    } catch (e: any) {
-      toast({ title: "Failed to add member", description: e.message || "Error" });
-    }
-  };
-
-  const resetMemberForm = () => {
-    setOtpSent(false);
-    setOtp("");
-    setPendingMemberData(null);
-  };
 
   const handleResetPassword = async () => {
     if (!resetTarget) return;
@@ -502,9 +422,6 @@ const Settings = () => {
                       setUsername("");
                       setMemberName("");
                       setRole("manager");
-                      setOtp("");
-                      setOtpSent(false);
-                      setPendingMemberData(null);
                     }
                   }}>
                     <DialogTrigger asChild>
@@ -543,48 +460,9 @@ const Settings = () => {
                             </SelectContent>
                           </Select>
                         </div>
-                        {otpSent && (
-                          <div className="grid gap-2">
-                            <Label>Enter OTP</Label>
-                            <p className="text-sm text-muted-foreground">
-                              Enter the 6-digit OTP sent to {pendingMemberData?.phoneNumber} for role assignment verification.
-                            </p>
-                            <InputOTP 
-                              maxLength={6}
-                              value={otp} 
-                              onChange={setOtp}
-                              onComplete={(value) => {
-                                setOtp(value);
-                              }}
-                            >
-                              <InputOTPGroup>
-                                <InputOTPSlot index={0} />
-                                <InputOTPSlot index={1} />
-                                <InputOTPSlot index={2} />
-                              </InputOTPGroup>
-                              <InputOTPSeparator />
-                              <InputOTPGroup>
-                                <InputOTPSlot index={3} />
-                                <InputOTPSlot index={4} />
-                                <InputOTPSlot index={5} />
-                              </InputOTPGroup>
-                            </InputOTP>
-                          </div>
-                        )}
                       </div>
                       <DialogFooter>
-                        {!otpSent ? (
-                          <Button onClick={sendMemberOtp}>Send OTP</Button>
-                        ) : (
-                          <div className="flex gap-2">
-                            <Button variant="outline" onClick={resetMemberForm}>
-                              Change Number
-                            </Button>
-                            <Button onClick={verifyMemberOtp} disabled={otp.length !== 6}>
-                              Verify & Create
-                            </Button>
-                          </div>
-                        )}
+                        <Button onClick={createMember}>Create</Button>
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>

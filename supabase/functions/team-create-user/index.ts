@@ -21,7 +21,7 @@ serve(async (req) => {
 
   try {
     const body: CreateUserReq = await req.json();
-    const { accountId, username, role, name, otpToken, skipOtpVerification } = body || {} as any;
+    const { accountId, username, role, name, otpToken, skipOtpVerification = true } = body || {} as any;
 
     if (!accountId || !username || !role || !name) {
       return new Response(JSON.stringify({ error: "Missing fields" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
