@@ -65,14 +65,29 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Only owner can add team members" }), { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
-    // Enforce unique username (phone number)
-    const { data: existing } = await userClient
+    // Check if phone number is already registered in usernames table
+    const { data: existingUsername } = await userClient
       .from("usernames")
       .select("username")
       .eq("username", phoneNumber)
       .maybeSingle();
-    if (existing) {
+    if (existingUsername) {
       return new Response(JSON.stringify({ error: "Phone number already registered" }), { status: 409, headers: { "Content-Type": "application/json", ...corsHeaders } });
+    }
+
+    // Check if phone number is already registered in auth.users table
+    const { data: existingAuthUser, error: authCheckError } = await adminClient
+      .from("auth.users")
+      .select("phone")
+      .eq("phone", phoneNumber)
+      .maybeSingle();
+    
+    if (authCheckError && !authCheckError.message?.includes('relation "auth.users" does not exist')) {
+      console.log("Auth user check error:", authCheckError);
+    }
+    
+    if (existingAuthUser) {
+      return new Response(JSON.stringify({ error: "Phone number already registered by another user" }), { status: 409, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
     // Check current member count (trigger also enforces)
@@ -115,6 +130,11 @@ serve(async (req) => {
       user_metadata: { username: phoneNumber, name: String(name).trim() },
     });
     if (createErr || !created.user) {
+      console.error("Failed to create auth user:", createErr);
+      // Handle specific duplicate phone number error
+      if (createErr?.message?.includes('duplicate') || createErr?.message?.includes('already registered')) {
+        return new Response(JSON.stringify({ error: "Phone number already registered by another user" }), { status: 409, headers: { "Content-Type": "application/json", ...corsHeaders } });
+      }
       return new Response(JSON.stringify({ error: createErr?.message || "Failed to create auth user" }), { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
@@ -129,7 +149,10 @@ serve(async (req) => {
         phone: phoneNumber 
       });
     if (profileErr) {
-      return new Response(JSON.stringify({ error: "Failed to create user profile" }), { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } });
+      console.error("Failed to create user profile:", profileErr);
+      // Clean up the created auth user if profile creation fails
+      await adminClient.auth.admin.deleteUser(newUserId);
+      return new Response(JSON.stringify({ error: "Failed to create user profile: " + profileErr.message }), { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
     // Insert membership (RLS ensures only owner can insert)
