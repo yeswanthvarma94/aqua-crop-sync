@@ -68,30 +68,30 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Only owner can add team members" }), { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
-    // Check if phone number is already registered in usernames table
+    // Check if the same phone is already used as a username in this account
     const { data: existingUsername } = await userClient
       .from("usernames")
       .select("username")
+      .eq("account_id", accountId)
       .eq("username", phoneNumber)
       .maybeSingle();
     if (existingUsername) {
-      return new Response(JSON.stringify({ error: "Phone number already registered" }), { status: 409, headers: { "Content-Type": "application/json", ...corsHeaders } });
+      return new Response(JSON.stringify({ error: "This phone number is already added to this account" }), { status: 409, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
-    // Check if phone number is already registered in auth.users table
-    const { data: existingAuthUser, error: authCheckError } = await adminClient
-      .from("auth.users")
-      .select("phone")
+    // See if a user already exists with this phone (via profiles; service role bypasses RLS)
+    const { data: existingProfile, error: profileLookupErr } = await adminClient
+      .from("profiles")
+      .select("user_id")
       .eq("phone", phoneNumber)
       .maybeSingle();
-    
-    if (authCheckError && !authCheckError.message?.includes('relation "auth.users" does not exist')) {
-      console.log("Auth user check error:", authCheckError);
+    if (profileLookupErr) {
+      console.log("Profile lookup error:", profileLookupErr);
     }
-    
-    if (existingAuthUser) {
-      return new Response(JSON.stringify({ error: "Phone number already registered by another user" }), { status: 409, headers: { "Content-Type": "application/json", ...corsHeaders } });
-    }
+
+    // Note: We intentionally do not query auth.users via PostgREST.
+    // If a user with this phone exists, we'll detect it below when creating the auth user
+    // and then fall back to the existing profile to get the user_id.
 
     // Check current member count (trigger also enforces)
     const { count } = await userClient
@@ -120,48 +120,75 @@ serve(async (req) => {
       }
     }
 
-    // Generate a secure temporary password for the user
-    const tempPassword = crypto.randomUUID().substring(0, 12) + "!Aa1";
+    // Determine target user: use existing profile by phone if available; otherwise create a new auth user
+    let tempPassword: string | undefined;
+    let newUserId = existingProfile?.user_id as string | undefined;
 
-    // Create user with phone number and temporary password
-    const { data: created, error: createErr } = await adminClient.auth.admin.createUser({
-      phone: phoneNumber,
-      password: tempPassword,
-      phone_confirm: true,
-      user_metadata: { username: phoneNumber, name: String(name).trim() },
-    });
-    if (createErr || !created.user) {
-      console.error("Failed to create auth user:", createErr);
-      // Handle specific duplicate phone number error
-      if (createErr?.message?.includes('duplicate') || createErr?.message?.includes('already registered')) {
-        return new Response(JSON.stringify({ error: "Phone number already registered by another user" }), { status: 409, headers: { "Content-Type": "application/json", ...corsHeaders } });
-      }
-      return new Response(JSON.stringify({ error: createErr?.message || "Failed to create auth user" }), { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } });
-    }
-
-    const newUserId = created.user.id;
-
-    // Insert profile with name
-    const { error: profileErr } = await adminClient
-      .from("profiles")
-      .insert({ 
-        user_id: newUserId, 
-        name: String(name).trim(), 
-        phone: phoneNumber 
+    if (!newUserId) {
+      tempPassword = crypto.randomUUID().substring(0, 12) + "!Aa1";
+      const { data: created, error: createErr } = await adminClient.auth.admin.createUser({
+        phone: phoneNumber,
+        password: tempPassword,
+        phone_confirm: true,
+        user_metadata: { username: phoneNumber, name: String(name).trim() },
       });
-    if (profileErr) {
-      console.error("Failed to create user profile:", profileErr);
-      // Clean up the created auth user if profile creation fails
-      await adminClient.auth.admin.deleteUser(newUserId);
-      return new Response(JSON.stringify({ error: "Failed to create user profile: " + profileErr.message }), { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } });
+      if (createErr || !created?.user) {
+        console.error("Failed to create auth user:", createErr);
+        // If phone already exists, look up the existing profile and reuse it
+        if (createErr?.status === 422 || createErr?.message?.toLowerCase().includes("phone") || createErr?.message?.toLowerCase().includes("exists")) {
+          const { data: prof2 } = await adminClient
+            .from("profiles")
+            .select("user_id")
+            .eq("phone", phoneNumber)
+            .maybeSingle();
+          if (!prof2) {
+            return new Response(JSON.stringify({ error: "Phone number already registered" }), { status: 409, headers: { "Content-Type": "application/json", ...corsHeaders } });
+          }
+          newUserId = prof2.user_id as string;
+          tempPassword = undefined; // existing user; no temp password generated
+        } else {
+          return new Response(JSON.stringify({ error: createErr?.message || "Failed to create auth user" }), { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } });
+        }
+      } else {
+        newUserId = created.user.id;
+      }
     }
 
-    // Insert membership (RLS ensures only owner can insert)
-    const { error: memErr } = await userClient
+    // Ensure a profile exists and update basic fields
+    const { error: profileUpsertErr } = await adminClient
+      .from("profiles")
+      .upsert({ user_id: newUserId as string, name: String(name).trim(), phone: phoneNumber }, { onConflict: "user_id" });
+    if (profileUpsertErr) {
+      console.error("Failed to upsert user profile:", profileUpsertErr);
+      return new Response(JSON.stringify({ error: "Failed to update user profile: " + profileUpsertErr.message }), { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } });
+    }
+
+    // Ensure membership exists (update role if already a member)
+    const { data: existingMem } = await userClient
       .from("account_members")
-      .insert({ account_id: accountId, user_id: newUserId, role });
-    if (memErr) {
-      return new Response(JSON.stringify({ error: memErr.message }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
+      .select("id, role")
+      .eq("account_id", accountId)
+      .eq("user_id", newUserId as string)
+      .maybeSingle();
+
+    if (existingMem) {
+      if ((existingMem as any).role !== role) {
+        const { error: updErr } = await userClient
+          .from("account_members")
+          .update({ role })
+          .eq("account_id", accountId)
+          .eq("user_id", newUserId as string);
+        if (updErr) {
+          return new Response(JSON.stringify({ error: updErr.message }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
+        }
+      }
+    } else {
+      const { error: memErr } = await userClient
+        .from("account_members")
+        .insert({ account_id: accountId, user_id: newUserId as string, role });
+      if (memErr) {
+        return new Response(JSON.stringify({ error: memErr.message }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
+      }
     }
 
     // Save username mapping
