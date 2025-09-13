@@ -54,6 +54,9 @@ serve(async (req) => {
       global: { headers: { Authorization: req.headers.get("Authorization")! } },
     });
 
+    // Service client for admin auth operations
+    const adminClient = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
+
     // Verify caller is owner of account
     const { data: ownerCheck, error: ownerErr } = await userClient
       .from("accounts")
@@ -99,8 +102,6 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Member limit reached (max 5 including owner)" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
-    // Service client for admin auth operations
-    const adminClient = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
     // If OTP token is provided and not skipping verification, verify it first
     if (otpToken && !skipOtpVerification) {
