@@ -1,6 +1,7 @@
 import HeaderPickers from "@/components/HeaderPickers";
-import SyncBadge from "@/components/SyncBadge";
 import QuickActionsGrid from "@/components/QuickActionsGrid";
+import { NetworkStatus } from "@/components/NetworkStatus";
+import { SyncStatus } from "@/components/SyncStatus";
 import TabBar from "@/components/TabBar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -72,7 +73,10 @@ const Index = () => {
           </div>
           <div className="flex items-center gap-3 animate-fade-in">
             <LanguageSelector />
-            <SyncBadge state="queued" />
+            <div className="flex flex-col items-end gap-1">
+              <NetworkStatus />
+              <SyncStatus />
+            </div>
           </div>
         </div>
         <div className="max-w-screen-md mx-auto px-4 pb-4">

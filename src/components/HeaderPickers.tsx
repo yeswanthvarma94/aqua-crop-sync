@@ -4,8 +4,6 @@ import { useSelection } from "@/state/SelectionContext";
 import { useAuth } from "@/state/AuthContext";
 import { useTranslation } from "react-i18next";
 import { useOfflineStorage } from "@/hooks/useOfflineStorage";
-import { NetworkStatus } from "./NetworkStatus";
-import { SyncStatus } from "./SyncStatus";
 
 interface Farm { id: string; name: string }
 interface Tank { id: string; name: string; type: "shrimp" | "fish"; farm_id: string }
@@ -60,12 +58,6 @@ const HeaderPickers = () => {
             </SelectContent>
           </Select>
         </div>
-      </div>
-      
-      {/* Status Indicators */}
-      <div className="flex items-center space-x-2 shrink-0">
-        <NetworkStatus />
-        <SyncStatus />
       </div>
     </div>
   );
