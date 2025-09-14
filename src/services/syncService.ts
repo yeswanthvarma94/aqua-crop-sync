@@ -238,7 +238,7 @@ export class SyncService {
           syncStatus: 'synced' as const,
           lastModified: Date.now()
         }));
-        await db.farms.bulkAdd(offlineFarms);
+        await db.farms.bulkPut(offlineFarms);
       }
 
       // Download tanks
@@ -254,7 +254,7 @@ export class SyncService {
           syncStatus: 'synced' as const,
           lastModified: Date.now()
         }));
-        await db.tanks.bulkAdd(offlineTanks);
+        await db.tanks.bulkPut(offlineTanks);
       }
 
       // Download stocks
@@ -270,7 +270,7 @@ export class SyncService {
           syncStatus: 'synced' as const,
           lastModified: Date.now()
         }));
-        await db.stocks.bulkAdd(offlineStocks);
+        await db.stocks.bulkPut(offlineStocks);
       }
 
       console.log('User data downloaded successfully');
