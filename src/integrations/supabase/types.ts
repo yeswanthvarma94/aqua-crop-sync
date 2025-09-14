@@ -577,6 +577,15 @@ export type Database = {
         Args: { user_uuid: string }
         Returns: undefined
       }
+      get_team_members: {
+        Args: { account_id_param: string }
+        Returns: {
+          name: string
+          phone: string
+          role: Database["public"]["Enums"]["membership_role"]
+          user_id: string
+        }[]
+      }
       is_enterprise_owner: {
         Args: { user_uuid: string }
         Returns: boolean

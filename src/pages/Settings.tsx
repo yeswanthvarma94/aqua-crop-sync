@@ -56,10 +56,9 @@ const applyTheme = (theme: "light" | "dark") => {
 type UserRole = "owner" | "manager" | "partner";
 interface TeamRow {
   user_id: string;
-  username: string;
-  role: UserRole;
-  created_at: string;
   name: string;
+  phone: string;
+  role: UserRole;
 }
 
 // Diagnostics helpers
@@ -131,31 +130,27 @@ const Settings = () => {
 
   const refreshTeam = async () => {
     if (!accountId) return;
-    const { data: members } = await supabase
-      .from("account_members")
-      .select("user_id, role, created_at")
-      .eq("account_id", accountId);
-    const { data: names } = await supabase
-      .from("usernames")
-      .select("user_id, username")
-      .eq("account_id", accountId);
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("user_id, name")
-      .in("user_id", (members || []).map(m => m.user_id));
-    
-    const nameMap = new Map((names || []).map((n: any) => [n.user_id as string, n.username as string]));
-    const profileMap = new Map((profiles || []).map((p: any) => [p.user_id as string, p.name as string]));
-    
-    const rows: TeamRow[] = (members || []).map((m: any) => ({
-      user_id: m.user_id as string,
-      username: nameMap.get(m.user_id as string) || "—",
-      role: m.role as UserRole,
-      created_at: m.created_at as string,
-      name: profileMap.get(m.user_id as string) || "—",
-    }));
-    setTeam(rows);
-    setMemberCount(new Set((members || []).map((m: any) => m.user_id)).size);
+    try {
+      const { data, error } = await supabase.rpc('get_team_members', { 
+        account_id_param: accountId 
+      });
+      
+      if (error) throw error;
+      
+      const rows: TeamRow[] = (data || []).map((member: any) => ({
+        user_id: member.user_id,
+        name: member.name || "—",
+        phone: member.phone || "—",
+        role: member.role as UserRole,
+      }));
+      
+      setTeam(rows);
+      setMemberCount(rows.length);
+    } catch (error) {
+      console.error('Error fetching team members:', error);
+      setTeam([]);
+      setMemberCount(0);
+    }
   };
 
   useEffect(() => { refreshTeam(); }, [accountId]);
@@ -225,11 +220,11 @@ const Settings = () => {
     if (!accountId) return;
     try {
       const { error } = await supabase.functions.invoke("team-reset-password", {
-        body: { accountId, username: resetTarget.username },
+        body: { accountId, username: resetTarget.phone },
       } as any);
       if (error) throw error;
       setResetTarget(null);
-      toast({ title: "Reset initiated", description: `OTP sent to ${resetTarget.username} for password reset` });
+      toast({ title: "Reset initiated", description: `OTP sent to ${resetTarget.phone} for password reset` });
     } catch (e: any) {
       toast({ title: "Failed to reset", description: e.message || "Error" });
     }
@@ -470,51 +465,55 @@ const Settings = () => {
 
                 <div className="rounded-md border">
                   <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Username</TableHead>
-                        <TableHead>Role</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {team.length === 0 ? (
+                      <TableHeader>
                         <TableRow>
-                          <TableCell colSpan={4} className="text-center text-muted-foreground">No team members yet.</TableCell>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Phone Number</TableHead>
+                          <TableHead>Role</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
-                      ) : (
-                        team.map((m) => (
-                          <TableRow key={m.user_id}>
-                            <TableCell className="font-medium">{m.name}</TableCell>
-                            <TableCell>{m.username}</TableCell>
-                            <TableCell className="uppercase"><Badge variant="secondary">{m.role}</Badge></TableCell>
-                            <TableCell className="text-right space-x-2">
-                              <Dialog
-                                open={resetTarget?.user_id === m.user_id}
-                                onOpenChange={(v) => { if (!v) { setResetTarget(null); } }}
-                              >
-                                <DialogTrigger asChild>
-                                  <Button size="sm" variant="secondary" onClick={() => setResetTarget(m)}>Reset Password</Button>
-                                </DialogTrigger>
-                                  <DialogContent className="sm:max-w-[420px]">
-                                    <DialogHeader>
-                                      <DialogTitle>Reset password — {m.username}</DialogTitle>
-                                    </DialogHeader>
-                                    <div className="text-sm text-muted-foreground">
-                                      An OTP will be sent to {m.username} to reset their password.
-                                    </div>
-                                    <DialogFooter>
-                                      <Button onClick={handleResetPassword}>Send Reset OTP</Button>
-                                    </DialogFooter>
-                                </DialogContent>
-                              </Dialog>
-                              <Button size="sm" variant="destructive" onClick={() => handleDeleteUser(m.user_id)}>Delete</Button>
-                            </TableCell>
+                      </TableHeader>
+                      <TableBody>
+                        {team.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={4} className="text-center text-muted-foreground">No team members yet.</TableCell>
                           </TableRow>
-                        ))
-                      )}
-                    </TableBody>
+                        ) : (
+                          team.map((m) => (
+                            <TableRow key={m.user_id}>
+                              <TableCell className="font-medium">{m.name}</TableCell>
+                              <TableCell>{m.phone}</TableCell>
+                              <TableCell className="uppercase"><Badge variant="secondary">{m.role}</Badge></TableCell>
+                              <TableCell className="text-right space-x-2">
+                                {m.role !== "owner" && (
+                                  <>
+                                    <Dialog
+                                      open={resetTarget?.user_id === m.user_id}
+                                      onOpenChange={(v) => { if (!v) { setResetTarget(null); } }}
+                                    >
+                                      <DialogTrigger asChild>
+                                        <Button size="sm" variant="secondary" onClick={() => setResetTarget(m)}>Reset Password</Button>
+                                      </DialogTrigger>
+                                      <DialogContent className="sm:max-w-[420px]">
+                                        <DialogHeader>
+                                          <DialogTitle>Reset password — {m.phone}</DialogTitle>
+                                        </DialogHeader>
+                                        <div className="text-sm text-muted-foreground">
+                                          An OTP will be sent to {m.phone} to reset their password.
+                                        </div>
+                                        <DialogFooter>
+                                          <Button onClick={handleResetPassword}>Send Reset OTP</Button>
+                                        </DialogFooter>
+                                      </DialogContent>
+                                    </Dialog>
+                                    <Button size="sm" variant="destructive" onClick={() => handleDeleteUser(m.user_id)}>Delete</Button>
+                                  </>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
                   </Table>
                 </div>
               </>
