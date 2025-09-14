@@ -34,6 +34,8 @@ const Auth = () => {
   const { signInLocal, signInDev, isDevLoginEnabled } = useAuth();
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
+  const [password, setPassword] = useState("");
+  const [mode, setMode] = useState<'otp' | 'password'>('otp');
   const [loading, setLoading] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
@@ -55,41 +57,26 @@ const Auth = () => {
         .eq("username", phoneNumber)
         .maybeSingle();
 
-      if (usernameExists) {
-        // This is a team member, send OTP to existing user
-        const { error } = await supabase.auth.signInWithOtp({
-          phone: phoneNumber,
-          options: {
-            channel: 'sms',
-          }
-        });
+      // Send OTP regardless of new/existing, backend will handle user creation
+      const { error } = await supabase.auth.signInWithOtp({
+        phone: phoneNumber,
+        options: { channel: 'sms' }
+      });
 
-        if (error) {
-          console.error('OTP send error:', error);
-          toast.error(error.message || "Failed to send OTP");
-          return;
+      if (error) {
+        console.error('OTP send error:', error);
+        const msg = error.message || "Failed to send OTP";
+        toast.error(msg);
+        // Detect Twilio trial/unsupported SMS errors and suggest password login
+        if (/21608|unverified|Trial accounts cannot send messages/i.test(msg)) {
+          toast.info("SMS is unavailable on trial. Use password login.");
+          setMode('password');
         }
-
-        setOtpSent(true);
-        toast.success("OTP sent to your phone number");
-      } else {
-        // New user - will create owner account after OTP verification
-        const { error } = await supabase.auth.signInWithOtp({
-          phone: phoneNumber,
-          options: {
-            channel: 'sms',
-          }
-        });
-
-        if (error) {
-          console.error('OTP send error:', error);
-          toast.error(error.message || "Failed to send OTP");
-          return;
-        }
-
-        setOtpSent(true);
-        toast.success("OTP sent to your phone number");
+        return;
       }
+
+      setOtpSent(true);
+      toast.success("OTP sent to your phone number");
     } catch (error: any) {
       console.error('OTP send error:', error);
       toast.error("Failed to send OTP");
@@ -123,6 +110,32 @@ const Auth = () => {
     } catch (error: any) {
       console.error('OTP verification error:', error);
       toast.error("Failed to verify OTP");
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const signInWithPassword = async () => {
+    if (!phone.trim() || !password) {
+      toast.error("Enter phone and password");
+      return;
+    }
+    try {
+      setLoading(true);
+      const { error } = await supabase.auth.signInWithPassword({
+        phone: `+91${phone}`,
+        password,
+      });
+      if (error) {
+        console.error('Password login error:', error);
+        toast.error(error.message || 'Invalid phone or password');
+        return;
+      }
+      toast.success('Signed in successfully');
+      navigate('/');
+    } catch (error: any) {
+      console.error('Password login error:', error);
+      toast.error('Failed to sign in');
     } finally {
       setLoading(false);
     }
@@ -162,7 +175,7 @@ const Auth = () => {
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          {!otpSent ? (
+          {mode === 'password' ? (
             <>
               <div className="space-y-4">
                 <div>
@@ -179,79 +192,140 @@ const Auth = () => {
                       value={phone}
                       onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                       className="pl-20"
-                      onKeyPress={(e) => e.key === 'Enter' && sendOtp()}
+                      onKeyPress={(e) => e.key === 'Enter' && signInWithPassword()}
                     />
-                  </div>
                 </div>
               </div>
+              <div>
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Enter password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && signInWithPassword()}
+                />
+              </div>
+            </div>
 
-              <Button 
-                onClick={sendOtp} 
-                disabled={otpLoading || !phone.trim()}
-                className="w-full bg-orange-500 hover:bg-orange-600 text-white"
-              >
-                {otpLoading ? "Sending OTP..." : "Get OTP"}
+            <Button 
+              onClick={signInWithPassword}
+              disabled={loading || !phone.trim() || !password}
+              className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+            >
+              {loading ? "Signing in..." : "Sign In"}
+            </Button>
+            <div className="text-center">
+              <Button variant="link" className="px-0 text-sm" onClick={() => setMode('otp')}>
+                Use OTP instead
               </Button>
-            </>
+            </div>
+          </>
           ) : (
             <>
-              <div className="space-y-4">
-                <div className="text-center">
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Enter the 6-digit OTP sent to +91{phone}
-                  </p>
-                  <InputOTP 
-                    maxLength={6} 
-                    value={otp} 
-                    onChange={setOtp}
-                    onComplete={(value) => {
-                      setOtp(value);
-                      setTimeout(() => verifyOtp(), 100);
-                    }}
-                  >
-                    <InputOTPGroup>
-                      <InputOTPSlot index={0} />
-                      <InputOTPSlot index={1} />
-                      <InputOTPSlot index={2} />
-                    </InputOTPGroup>
-                    <InputOTPSeparator />
-                    <InputOTPGroup>
-                      <InputOTPSlot index={3} />
-                      <InputOTPSlot index={4} />
-                      <InputOTPSlot index={5} />
-                    </InputOTPGroup>
-                  </InputOTP>
-                </div>
+              {!otpSent ? (
+                <>
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="phone">Phone Number</Label>
+                      <div className="relative">
+                        <div className="absolute left-3 top-1/2 transform -translate-y-1/2 flex items-center space-x-2">
+                          <span className="text-2xl">🇮🇳</span>
+                          <span className="text-sm text-muted-foreground">+91</span>
+                        </div>
+                        <Input
+                          id="phone"
+                          type="tel"
+                          placeholder="Enter your phone number"
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                          className="pl-20"
+                          onKeyPress={(e) => e.key === 'Enter' && sendOtp()}
+                        />
+                      </div>
+                    </div>
+                  </div>
 
-                <div className="flex justify-between items-center text-sm">
-                  <Button
-                    variant="link"
-                    className="px-0 text-sm"
-                    onClick={() => {
-                      setOtpSent(false);
-                      setOtp("");
-                    }}
+                  <Button 
+                    onClick={sendOtp} 
+                    disabled={otpLoading || !phone.trim()}
+                    className="w-full bg-orange-500 hover:bg-orange-600 text-white"
                   >
-                    Change Number
+                    {otpLoading ? "Sending OTP..." : "Get OTP"}
                   </Button>
-                  <Button
-                    variant="link"
-                    className="px-0 text-sm"
-                    onClick={sendOtp}
-                    disabled={otpLoading}
-                  >
-                    {otpLoading ? "Resending..." : "Resend OTP"}
-                  </Button>
-                </div>
-              </div>
+                  <div className="text-center">
+                    <Button variant="link" className="px-0 text-sm" onClick={() => setMode('password')}>
+                      Use password instead
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-4">
+                    <div className="text-center">
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Enter the 6-digit OTP sent to +91{phone}
+                      </p>
+                      <InputOTP 
+                        maxLength={6} 
+                        value={otp} 
+                        onChange={setOtp}
+                        onComplete={(value) => {
+                          setOtp(value);
+                          setTimeout(() => verifyOtp(), 100);
+                        }}
+                      >
+                        <InputOTPGroup>
+                          <InputOTPSlot index={0} />
+                          <InputOTPSlot index={1} />
+                          <InputOTPSlot index={2} />
+                        </InputOTPGroup>
+                        <InputOTPSeparator />
+                        <InputOTPGroup>
+                          <InputOTPSlot index={3} />
+                          <InputOTPSlot index={4} />
+                          <InputOTPSlot index={5} />
+                        </InputOTPGroup>
+                      </InputOTP>
+                    </div>
 
-              <Button 
-                onClick={verifyOtp} 
-                disabled={loading || otp.length !== 6}
-                className="w-full bg-orange-500 hover:bg-orange-600 text-white"
-              >
-                {loading ? "Verifying..." : "Verify OTP"}
-              </Button>
+                    <div className="flex justify-between items-center text-sm">
+                      <Button
+                        variant="link"
+                        className="px-0 text-sm"
+                        onClick={() => {
+                          setOtpSent(false);
+                          setOtp("");
+                        }}
+                      >
+                        Change Number
+                      </Button>
+                      <Button
+                        variant="link"
+                        className="px-0 text-sm"
+                        onClick={sendOtp}
+                        disabled={otpLoading}
+                      >
+                        {otpLoading ? "Resending..." : "Resend OTP"}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <Button 
+                    onClick={verifyOtp} 
+                    disabled={loading || otp.length !== 6}
+                    className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+                  >
+                    {loading ? "Verifying..." : "Verify OTP"}
+                  </Button>
+                  <div className="text-center">
+                    <Button variant="link" className="px-0 text-sm" onClick={() => setMode('password')}>
+                      Trouble receiving SMS? Use password instead
+                    </Button>
+                  </div>
+                </>
+              )}
             </>
           )}
 
