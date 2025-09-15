@@ -14,8 +14,6 @@ import { AuthProvider, useAuth } from "@/state/AuthContext";
 import { SelectionProvider } from "@/state/SelectionContext";
 import { LoadingProvider, useLoading } from "@/contexts/LoadingContext";
 import { LoadingOverlay } from "@/components/ui/loading-overlay";
-import { useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import Farms from "./pages/Farms";
 import Tanks from "./pages/Tanks";
 import TankDetail from "./pages/TankDetail";
@@ -49,29 +47,6 @@ const PublicOnlyRoute = ({ children }: { children: JSX.Element }) => {
 // Loading wrapper component
 const LoadingWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isLoading } = useLoading();
-  
-  // Handle OAuth redirects
-  useEffect(() => {
-    const handleAuthRedirect = async () => {
-      const { data, error } = await supabase.auth.getSession();
-      
-      if (error) {
-        console.error('Auth redirect error:', error);
-        return;
-      }
-      
-      if (data.session) {
-        console.log('OAuth redirect successful, user authenticated:', data.session.user.id);
-        // The AuthContext will handle the rest
-      }
-    };
-    
-    // Check for OAuth redirect on app load
-    if (window.location.hash.includes('access_token') || window.location.search.includes('code=')) {
-      console.log('OAuth redirect detected');
-      handleAuthRedirect();
-    }
-  }, []);
   
   return (
     <>
