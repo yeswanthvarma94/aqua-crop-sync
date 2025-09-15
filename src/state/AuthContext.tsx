@@ -56,6 +56,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Supabase auth listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log('Auth state change:', _event, session?.user?.id);
+      
       const sUser = session?.user;
       if (sUser) {
         const mapped: User = {
@@ -66,6 +68,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: "owner",
           status: "active",
         };
+        
+        console.log('Setting user from auth state change:', mapped);
         setUser(mapped);
 
         // Initialize Free plan for new users
@@ -74,10 +78,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Defer backend calls to avoid deadlocks
         setTimeout(async () => {
           try {
+            console.log('Bootstrapping account for user:', sUser.id);
             const accId = await ensureDefaultAccount(sUser.id);
+            console.log('Account ID obtained:', accId);
             setAccountId(accId);
             setActiveAccountId(accId);
             const role = (await getMembershipRole(accId, sUser.id)) || "owner";
+            console.log('User role determined:', role);
             setUser((prev) => (prev ? { ...prev, role } : prev));
           } catch (e) {
             console.error("Account bootstrap failed:", e);
@@ -87,6 +94,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Don't force logout of dev/local user here; only clear if no local session persisted
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) {
+          console.log('No session found, clearing user state');
           setUser(null);
           setAccountId(null);
         }
@@ -95,6 +103,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Initialize current session
     supabase.auth.getSession().then(({ data }) => {
+      console.log('Initial session check:', data.session?.user?.id);
+      
       const sUser = data.session?.user;
       if (sUser) {
         const mapped: User = {
@@ -105,6 +115,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: "owner",
           status: "active",
         };
+        
+        console.log('Setting user from initial session:', mapped);
         setUser(mapped);
         // Initialize Free plan for new users
         initializeFreePlan();
@@ -112,10 +124,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Defer follow-up
         setTimeout(async () => {
           try {
+            console.log('Initial account bootstrap for user:', sUser.id);
             const accId = await ensureDefaultAccount(sUser.id);
+            console.log('Initial account ID obtained:', accId);
             setAccountId(accId);
             setActiveAccountId(accId);
             const role = (await getMembershipRole(accId, sUser.id)) || "owner";
+            console.log('Initial user role determined:', role);
             setUser((prev) => (prev ? { ...prev, role } : prev));
           } catch (e) {
             console.error("Account bootstrap failed:", e);
