@@ -48,58 +48,11 @@ export default function Auth() {
 
   // Redirect if already logged in
   useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        console.log("User already authenticated, redirecting...");
-        
-        // Check if this is an OAuth user (Google/Facebook) - they don't have phone numbers
-        const isOAuthUser = !session.user.phone && (
-          session.user.app_metadata?.provider === 'google' || 
-          session.user.app_metadata?.provider === 'facebook' ||
-          session.user.user_metadata?.provider === 'google' ||
-          session.user.user_metadata?.provider === 'facebook'
-        );
-        
-        if (isOAuthUser) {
-          console.log("OAuth user detected, immediate redirect");
-          navigate("/");
-          return;
-        }
-        
-        navigate("/");
-      }
-    };
-    
-    checkAuth();
-  }, [navigate]);
-
-  // Listen for auth state changes to handle OAuth callbacks
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log("Auth state change:", event, session?.user?.email);
-        
-        if (event === 'SIGNED_IN' && session?.user) {
-          // Check if this is an OAuth user
-          const isOAuthUser = !session.user.phone && (
-            session.user.app_metadata?.provider === 'google' || 
-            session.user.app_metadata?.provider === 'facebook' ||
-            session.user.user_metadata?.provider === 'google' ||
-            session.user.user_metadata?.provider === 'facebook'
-          );
-          
-          if (isOAuthUser) {
-            console.log("OAuth login successful, redirecting...");
-            navigate("/");
-            return;
-          }
-        }
-      }
-    );
-
-    return () => subscription.unsubscribe();
-  }, [navigate]);
+    if (user) {
+      console.log("User authenticated via AuthContext, redirecting to dashboard...");
+      navigate("/");
+    }
+  }, [user, navigate]);
 
   // Check phone number to determine auth method (only for phone-based auth)
   const checkPhoneForMPIN = async (phoneNumber: string) => {
