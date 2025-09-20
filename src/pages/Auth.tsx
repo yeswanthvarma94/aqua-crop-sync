@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Capacitor } from '@capacitor/core';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -46,6 +47,16 @@ export default function Auth() {
   const [userHasMpin, setUserHasMpin] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
+  // Helper function to get the correct redirect URL based on platform
+  const getRedirectUrl = () => {
+    if (Capacitor.isNativePlatform()) {
+      // For mobile apps, use the custom scheme from capacitor.config.ts
+      return 'app.lovable.08a558a8aca8494b8002d1fc467ee319://callback';
+    } else {
+      // For web, use the current origin
+      return window.location.origin + '/';
+    }
+  };
   // Redirect if already logged in
   useEffect(() => {
     if (user) {
@@ -330,56 +341,64 @@ export default function Auth() {
   };
 
   const googleLogin = async () => {
+    setIsLoading(true);
+    setError('');
+    
     try {
+      console.log('Initiating Google OAuth with redirect URL:', getRedirectUrl());
+      
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/`,
+          redirectTo: getRedirectUrl(),
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
         },
       });
       
       if (error) {
         console.error('Google login error:', error);
-        toast({
-          variant: "destructive",
-          title: "Authentication Error",
-          description: error.message,
-        });
+        setError(`Google login failed: ${error.message}`);
+      } else {
+        console.log('Google OAuth initiated successfully');
+        // Don't show success message here as user will be redirected
       }
     } catch (error: any) {
       console.error('Unexpected error during Google login:', error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to initialize Google login. Please try again.",
-      });
+      setError('Failed to initialize Google login. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const facebookLogin = async () => {
+    setIsLoading(true);
+    setError('');
+    
     try {
+      console.log('Initiating Facebook OAuth with redirect URL:', getRedirectUrl());
+      
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'facebook',
         options: {
-          redirectTo: `${window.location.origin}/`,
+          redirectTo: getRedirectUrl(),
         },
       });
       
       if (error) {
         console.error('Facebook login error:', error);
-        toast({
-          variant: "destructive",
-          title: "Authentication Error",
-          description: error.message,
-        });
+        setError(`Facebook login failed: ${error.message}`);
+      } else {
+        console.log('Facebook OAuth initiated successfully');
+        // Don't show success message here as user will be redirected
       }
     } catch (error: any) {
       console.error('Unexpected error during Facebook login:', error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to initialize Facebook login. Please try again.",
-      });
+      setError('Failed to initialize Facebook login. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -422,6 +441,22 @@ export default function Auth() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Show platform info for debugging */}
+          {import.meta.env.DEV && (
+            <div className="text-xs text-muted-foreground text-center p-2 bg-secondary/50 rounded">
+              Platform: {Capacitor.isNativePlatform() ? 'Mobile App' : 'Web Browser'}
+              <br />
+              Redirect URL: {getRedirectUrl()}
+            </div>
+          )}
+
+          {/* Global error display */}
+          {error && (
+            <div className="text-sm text-destructive text-center p-3 bg-destructive/10 rounded-lg border border-destructive/20">
+              {error}
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="phone">Phone Number</Label>
             <PhoneInput
@@ -436,9 +471,10 @@ export default function Auth() {
             <Button 
               onClick={() => setMode('mpin')}
               className="w-full"
+              disabled={isLoading}
             >
               <Key className="mr-2 h-4 w-4" />
-              Login with MPIN
+              {isLoading ? 'Loading...' : 'Login with MPIN'}
             </Button>
           )}
 
@@ -470,6 +506,7 @@ export default function Auth() {
                     variant={autoDetectedPasswordMode ? "default" : "outline"}
                     onClick={() => setMode('password')}
                     className="w-full"
+                    disabled={isLoading}
                   >
                     <Key className="mr-2 h-4 w-4" />
                     {autoDetectedPasswordMode ? "Use password instead" : "Login with Password"}
@@ -496,11 +533,6 @@ export default function Auth() {
                     </div>
                   </div>
 
-                  {error && (
-                    <div className="text-sm text-destructive text-center">
-                      {error}
-                    </div>
-                  )}
 
                   <Button 
                     onClick={verifyOtp} 
@@ -519,6 +551,7 @@ export default function Auth() {
                         setError('');
                       }}
                       className="p-0 h-auto font-normal"
+                      disabled={isLoading}
                     >
                       <ArrowLeft className="mr-1 h-3 w-3" />
                       Back
@@ -527,6 +560,7 @@ export default function Auth() {
                       variant="link"
                       onClick={() => setMode('password')}
                       className="p-0 h-auto font-normal"
+                      disabled={isLoading}
                     >
                       Use Password
                     </Button>
@@ -544,14 +578,10 @@ export default function Auth() {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Enter your password"
+                      disabled={isLoading}
                     />
                   </div>
 
-                  {error && (
-                    <div className="text-sm text-destructive text-center">
-                      {error}
-                    </div>
-                  )}
 
                   <Button 
                     onClick={signInWithPassword} 
@@ -571,6 +601,7 @@ export default function Auth() {
                         setAutoDetectedPasswordMode(false);
                       }}
                       className="p-0 h-auto font-normal"
+                      disabled={isLoading}
                     >
                       <ArrowLeft className="mr-1 h-3 w-3" />
                       Back to OTP
@@ -597,6 +628,7 @@ export default function Auth() {
                 variant="outline"
                 onClick={googleLogin}
                 className="w-full"
+                disabled={isLoading}
               >
                 <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
                   <path
@@ -616,18 +648,19 @@ export default function Auth() {
                     d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                   />
                 </svg>
-                Google
+                {isLoading ? 'Loading...' : 'Google'}
               </Button>
               
               <Button
                 variant="outline"
                 onClick={facebookLogin}
                 className="w-full"
+                disabled={isLoading}
               >
                 <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24" fill="#1877F2">
                   <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
                 </svg>
-                Facebook
+                {isLoading ? 'Loading...' : 'Facebook'}
               </Button>
             </div>
           </div>
@@ -638,6 +671,7 @@ export default function Auth() {
               variant="link"
               onClick={() => navigate('/signup')}
               className="p-0 h-auto font-normal"
+              disabled={isLoading}
             >
               Sign up
             </Button>

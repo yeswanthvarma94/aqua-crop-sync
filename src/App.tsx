@@ -3,6 +3,8 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import TabBar from "./components/TabBar";
 import Index from "./pages/Index";
 import Feeding from "./pages/Feeding";
@@ -63,6 +65,36 @@ const LoadingWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) =
   );
 };
 
+// OAuth redirect handler component
+const OAuthHandler: React.FC = () => {
+  useEffect(() => {
+    const handleOAuthRedirect = async () => {
+      try {
+        console.log('Checking for OAuth session in URL...');
+        const { data, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('OAuth session error:', error);
+          return;
+        }
+        
+        if (data.session) {
+          console.log('OAuth session found, user authenticated:', data.session.user.email);
+          // The AuthProvider will handle the rest
+        } else {
+          console.log('No OAuth session found in URL');
+        }
+      } catch (error) {
+        console.error('Error handling OAuth redirect:', error);
+      }
+    };
+
+    // Check for OAuth redirect on app load
+    handleOAuthRedirect();
+  }, []);
+
+  return null;
+};
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -73,6 +105,7 @@ const App = () => (
           <SelectionProvider>
             <LoadingProvider>
               <LoadingWrapper>
+                <OAuthHandler />
                 <Routes>
               <Route path="/auth" element={<PublicOnlyRoute><Auth /></PublicOnlyRoute>} />
               <Route path="/signup" element={<PublicOnlyRoute><SignUp /></PublicOnlyRoute>} />

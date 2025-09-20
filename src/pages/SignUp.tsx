@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Capacitor } from '@capacitor/core';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,6 +35,16 @@ const SignUp = () => {
   const [referralCode, setReferralCode] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Helper function to get the correct redirect URL based on platform
+  const getRedirectUrl = () => {
+    if (Capacitor.isNativePlatform()) {
+      // For mobile apps, use the custom scheme from capacitor.config.ts
+      return 'app.lovable.08a558a8aca8494b8002d1fc467ee319://callback';
+    } else {
+      // For web, use the current origin
+      return window.location.origin + '/';
+    }
+  };
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -81,10 +92,12 @@ const SignUp = () => {
   const googleSignUp = async () => {
     try {
       setLoading(true);
+      console.log('Initiating Google OAuth signup with redirect URL:', getRedirectUrl());
+      
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/`,
+          redirectTo: getRedirectUrl(),
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
@@ -94,6 +107,8 @@ const SignUp = () => {
       if (error) {
         console.error('Google signup error:', error);
         toast.error(error.message);
+      } else {
+        console.log('Google OAuth signup initiated successfully');
       }
     } catch (error: any) {
       console.error('Google signup error:', error);
@@ -116,6 +131,15 @@ const SignUp = () => {
           </div>
         </CardHeader>
         <CardContent>
+          {/* Show platform info for debugging */}
+          {import.meta.env.DEV && (
+            <div className="text-xs text-muted-foreground text-center p-2 bg-secondary/50 rounded mb-4">
+              Platform: {Capacitor.isNativePlatform() ? 'Mobile App' : 'Web Browser'}
+              <br />
+              Redirect URL: {getRedirectUrl()}
+            </div>
+          )}
+
           <form onSubmit={handleSignUp} className="space-y-6">
             <div className="space-y-4">
               <div>
@@ -130,6 +154,7 @@ const SignUp = () => {
                     onChange={(e) => setName(e.target.value)}
                     className="pl-10"
                     required
+                    disabled={loading}
                   />
                 </div>
               </div>
@@ -149,6 +174,7 @@ const SignUp = () => {
                     onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                     className="pl-20"
                     required
+                    disabled={loading}
                   />
                 </div>
               </div>
@@ -164,6 +190,7 @@ const SignUp = () => {
                     value={referralCode}
                     onChange={(e) => setReferralCode(e.target.value)}
                     className="pl-10"
+                    disabled={loading}
                   />
                 </div>
               </div>
@@ -213,18 +240,43 @@ const SignUp = () => {
                     fill="#EA4335"
                   />
                 </svg>
-                Google
+                {loading ? 'Loading...' : 'Google'}
               </Button>
 
               <Button 
                 variant="outline" 
                 disabled={loading}
                 className="w-full"
+                onClick={async () => {
+                  setLoading(true);
+                  try {
+                    console.log('Initiating Facebook OAuth signup with redirect URL:', getRedirectUrl());
+                    
+                    const { error } = await supabase.auth.signInWithOAuth({
+                      provider: 'facebook',
+                      options: {
+                        redirectTo: getRedirectUrl(),
+                      },
+                    });
+                    
+                    if (error) {
+                      console.error('Facebook signup error:', error);
+                      toast.error(error.message);
+                    } else {
+                      console.log('Facebook OAuth signup initiated successfully');
+                    }
+                  } catch (error: any) {
+                    console.error('Facebook signup error:', error);
+                    toast.error('Failed to sign up with Facebook');
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
               >
                 <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24" fill="#1877F2">
                   <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
                 </svg>
-                Facebook
+                {loading ? 'Loading...' : 'Facebook'}
               </Button>
             </div>
           </div>
@@ -237,6 +289,7 @@ const SignUp = () => {
               variant="link"
               className="text-sm p-0 h-auto font-medium"
               onClick={() => navigate("/auth")}
+              disabled={loading}
             >
               Sign in
             </Button>
