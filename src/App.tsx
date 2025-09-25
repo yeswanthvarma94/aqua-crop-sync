@@ -27,6 +27,7 @@ import SignUp from "./pages/SignUp";
 import TestAuth from "./pages/TestAuth";
 import RecycleBin from "./pages/RecycleBin";
 import Calculators from "./pages/Calculators";
+import AuthCallback from "./pages/AuthCallback";
 const queryClient = new QueryClient();
 
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
@@ -106,27 +107,28 @@ const App = () => (
             <LoadingProvider>
               <LoadingWrapper>
                 <OAuthHandler />
-                <Routes>
-              <Route path="/auth" element={<PublicOnlyRoute><Auth /></PublicOnlyRoute>} />
-              <Route path="/signup" element={<PublicOnlyRoute><SignUp /></PublicOnlyRoute>} />
-              <Route path="/test-auth" element={<TestAuth />} />
-              <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-              <Route path="/feeding" element={<ProtectedRoute><Feeding /></ProtectedRoute>} />
-              <Route path="/materials" element={<ProtectedRoute><Materials /></ProtectedRoute>} />
-              <Route path="/expenses" element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
-              <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-              <Route path="/farms" element={<ProtectedRoute><Farms /></ProtectedRoute>} />
-              <Route path="/farms/:farmId/tanks" element={<ProtectedRoute><Tanks /></ProtectedRoute>} />
-              <Route path="/farms/:farmId/tanks/:tankId" element={<ProtectedRoute><TankDetail /></ProtectedRoute>} />
-              <Route path="/farms/:farmId/tanks/:tankId/feeding" element={<ProtectedRoute><TankFeeding /></ProtectedRoute>} />
-              <Route path="/farms/:farmId/stocks" element={<ProtectedRoute><Stocks /></ProtectedRoute>} />
-              <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
-              <Route path="/recycle-bin" element={<ProtectedRoute><RecycleBin /></ProtectedRoute>} />
-              <Route path="/calculators" element={<ProtectedRoute><Calculators /></ProtectedRoute>} />
-              
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<ProtectedRoute><NotFound /></ProtectedRoute>} />
-                </Routes>
+                 <Routes>
+                  <Route path="/auth" element={<PublicOnlyRoute><Auth /></PublicOnlyRoute>} />
+                  <Route path="/auth/callback" element={<AuthCallback />} />
+                  <Route path="/signup" element={<PublicOnlyRoute><SignUp /></PublicOnlyRoute>} />
+                  <Route path="/test-auth" element={<TestAuth />} />
+                  <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+                  <Route path="/feeding" element={<ProtectedRoute><Feeding /></ProtectedRoute>} />
+                  <Route path="/materials" element={<ProtectedRoute><Materials /></ProtectedRoute>} />
+                  <Route path="/expenses" element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
+                  <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+                  <Route path="/farms" element={<ProtectedRoute><Farms /></ProtectedRoute>} />
+                  <Route path="/farms/:farmId/tanks" element={<ProtectedRoute><Tanks /></ProtectedRoute>} />
+                  <Route path="/farms/:farmId/tanks/:tankId" element={<ProtectedRoute><TankDetail /></ProtectedRoute>} />
+                  <Route path="/farms/:farmId/tanks/:tankId/feeding" element={<ProtectedRoute><TankFeeding /></ProtectedRoute>} />
+                  <Route path="/farms/:farmId/stocks" element={<ProtectedRoute><Stocks /></ProtectedRoute>} />
+                  <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+                  <Route path="/recycle-bin" element={<ProtectedRoute><RecycleBin /></ProtectedRoute>} />
+                  <Route path="/calculators" element={<ProtectedRoute><Calculators /></ProtectedRoute>} />
+                  
+                  {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                  <Route path="*" element={<ProtectedRoute><NotFound /></ProtectedRoute>} />
+                 </Routes>
               </LoadingWrapper>
             </LoadingProvider>
           </SelectionProvider>
