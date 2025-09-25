@@ -49,13 +49,13 @@ export default function Auth() {
 
   // Helper function to get the correct redirect URL based on platform
   const getRedirectUrl = () => {
-    // Always direct OAuth back to a dedicated callback route
     if (Capacitor.isNativePlatform()) {
-      // For mobile apps, use the custom scheme and callback path
-      return 'app.lovable.08a558a8aca8494b8002d1fc467ee319://auth/callback';
+      // For mobile apps, use the custom scheme from capacitor.config.ts
+      return 'app.lovable.08a558a8aca8494b8002d1fc467ee319://callback';
+    } else {
+      // For web, use the current origin
+      return window.location.origin + '/';
     }
-    // For web, return a same-origin callback route
-    return `${window.location.origin}/auth/callback`;
   };
   // Redirect if already logged in
   useEffect(() => {
@@ -345,7 +345,7 @@ export default function Auth() {
     setError('');
     
     try {
-       console.log('Initiating Google OAuth with redirect URL:', getRedirectUrl());
+      console.log('Initiating Google OAuth with redirect URL:', getRedirectUrl());
       
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -378,7 +378,7 @@ export default function Auth() {
     setError('');
     
     try {
-       console.log('Initiating Facebook OAuth with redirect URL:', getRedirectUrl());
+      console.log('Initiating Facebook OAuth with redirect URL:', getRedirectUrl());
       
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'facebook',
