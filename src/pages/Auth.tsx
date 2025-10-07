@@ -112,23 +112,22 @@ export default function Auth() {
     setError('');
 
     try {
-      const { error } = await supabase.auth.signInWithOtp({
-        phone: phone,
-        options: { 
-          channel: 'sms',
-          data: { phone: phone }
-        }
+      const { data, error } = await supabase.functions.invoke('send-otp', {
+        body: { phone }
       });
 
       if (error) {
         console.error('OTP send error:', error);
-        setError(error.message);
+        setError(error.message || 'Failed to send OTP');
         
         // Auto-switch to password mode if SMS fails
-        if (error.message.includes('SMS') || error.message.includes('21608') || error.message.includes('unverified')) {
-          setAutoDetectedPasswordMode(true);
-          setMode('password');
-        }
+        setAutoDetectedPasswordMode(true);
+        setMode('password');
+        return;
+      }
+
+      if (data?.error) {
+        setError(data.error);
         return;
       }
 
@@ -155,20 +154,23 @@ export default function Auth() {
     setError('');
 
     try {
-      const { data, error } = await supabase.auth.verifyOtp({
-        phone: phone,
-        token: otp,
-        type: 'sms'
+      const { data, error } = await supabase.functions.invoke('verify-otp', {
+        body: { phone, otp }
       });
 
       if (error) {
         console.error('OTP verification error:', error);
-        setError(error.message);
+        setError(error.message || 'Failed to verify OTP');
         return;
       }
 
-      if (data.user) {
-        setCurrentUserId(data.user.id);
+      if (data?.error) {
+        setError(data.error);
+        return;
+      }
+
+      if (data?.success && data?.userId) {
+        setCurrentUserId(data.userId);
         
         // Check if user has MPIN after successful login
         await checkPhoneForMPIN(phone);
@@ -183,6 +185,9 @@ export default function Auth() {
           title: "Login successful!",
           description: "Welcome back to AquaLedger.",
         });
+        
+        // Refresh session
+        await supabase.auth.refreshSession();
         navigate('/');
       }
     } catch (error: any) {
