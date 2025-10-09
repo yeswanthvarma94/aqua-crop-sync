@@ -9,6 +9,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// DEV MODE: Set to true to skip SMS sending and log OTP to console instead
+// Enable this while completing Fast2SMS website verification
+const DEV_MODE = true;
+
 interface SendOtpRequest {
   phone: string;
 }
@@ -107,21 +111,27 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Send SMS via Fast2SMS
-    const smsSent = await sendSMS(phone, otp);
+    // Send SMS via Fast2SMS or log in dev mode
+    if (DEV_MODE) {
+      console.log(`🔐 DEV MODE - OTP for ${phone}: ${otp}`);
+      console.log('⚠️ SMS sending disabled. Complete Fast2SMS website verification to enable.');
+    } else {
+      const smsSent = await sendSMS(phone, otp);
 
-    if (!smsSent) {
-      return new Response(
-        JSON.stringify({ error: 'Failed to send OTP. Please try again.' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      if (!smsSent) {
+        return new Response(
+          JSON.stringify({ error: 'Failed to send OTP. Please try again.' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: 'OTP sent successfully',
-        expiresIn: 300 // 5 minutes in seconds
+        message: DEV_MODE ? 'OTP generated (check logs)' : 'OTP sent successfully',
+        expiresIn: 300, // 5 minutes in seconds
+        devMode: DEV_MODE
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

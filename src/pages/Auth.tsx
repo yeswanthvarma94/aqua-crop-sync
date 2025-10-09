@@ -133,8 +133,10 @@ export default function Auth() {
 
       setOtpSent(true);
       toast({
-        title: "OTP sent!",
-        description: "Please check your phone for the verification code.",
+        title: data?.devMode ? "OTP generated (Dev Mode)" : "OTP sent!",
+        description: data?.devMode 
+          ? "Check the Edge Function logs for your OTP code." 
+          : "Please check your phone for the verification code.",
       });
     } catch (error: any) {
       console.error('Unexpected error during OTP send:', error);
