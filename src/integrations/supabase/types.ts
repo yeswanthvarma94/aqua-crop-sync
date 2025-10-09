@@ -273,39 +273,6 @@ export type Database = {
           },
         ]
       }
-      otp_verifications: {
-        Row: {
-          attempts: number | null
-          created_at: string | null
-          expires_at: string
-          id: string
-          otp_code: string
-          phone_number: string
-          updated_at: string | null
-          verified: boolean | null
-        }
-        Insert: {
-          attempts?: number | null
-          created_at?: string | null
-          expires_at: string
-          id?: string
-          otp_code: string
-          phone_number: string
-          updated_at?: string | null
-          verified?: boolean | null
-        }
-        Update: {
-          attempts?: number | null
-          created_at?: string | null
-          expires_at?: string
-          id?: string
-          otp_code?: string
-          phone_number?: string
-          updated_at?: string | null
-          verified?: boolean | null
-        }
-        Relationships: []
-      }
       pending_changes: {
         Row: {
           account_id: string
@@ -359,7 +326,10 @@ export type Database = {
       profiles: {
         Row: {
           created_at: string
+          has_mpin: boolean | null
           id: string
+          mpin_created_at: string | null
+          mpin_hash: string | null
           name: string
           phone: string | null
           referral_code: string | null
@@ -368,7 +338,10 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          has_mpin?: boolean | null
           id?: string
+          mpin_created_at?: string | null
+          mpin_hash?: string | null
           name: string
           phone?: string | null
           referral_code?: string | null
@@ -377,7 +350,10 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          has_mpin?: boolean | null
           id?: string
+          mpin_created_at?: string | null
+          mpin_hash?: string | null
           name?: string
           phone?: string | null
           referral_code?: string | null
@@ -594,10 +570,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      cleanup_expired_otps: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
       cleanup_old_deleted_tanks: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -627,8 +599,20 @@ export type Database = {
         Args: { user_uuid: string }
         Returns: boolean
       }
+      set_user_mpin: {
+        Args: { mpin_value: string; user_id: string }
+        Returns: boolean
+      }
+      user_has_mpin: {
+        Args: { user_phone: string }
+        Returns: boolean
+      }
       validate_phone_number: {
         Args: { phone_text: string }
+        Returns: boolean
+      }
+      verify_user_mpin: {
+        Args: { mpin_input: string; user_phone: string }
         Returns: boolean
       }
     }
