@@ -359,10 +359,7 @@ export type Database = {
       profiles: {
         Row: {
           created_at: string
-          has_mpin: boolean | null
           id: string
-          mpin_created_at: string | null
-          mpin_hash: string | null
           name: string
           phone: string | null
           referral_code: string | null
@@ -371,10 +368,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          has_mpin?: boolean | null
           id?: string
-          mpin_created_at?: string | null
-          mpin_hash?: string | null
           name: string
           phone?: string | null
           referral_code?: string | null
@@ -383,10 +377,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
-          has_mpin?: boolean | null
           id?: string
-          mpin_created_at?: string | null
-          mpin_hash?: string | null
           name?: string
           phone?: string | null
           referral_code?: string | null
@@ -636,20 +627,8 @@ export type Database = {
         Args: { user_uuid: string }
         Returns: boolean
       }
-      set_user_mpin: {
-        Args: { mpin_value: string; user_id: string }
-        Returns: boolean
-      }
-      user_has_mpin: {
-        Args: { user_phone: string }
-        Returns: boolean
-      }
       validate_phone_number: {
         Args: { phone_text: string }
-        Returns: boolean
-      }
-      verify_user_mpin: {
-        Args: { mpin_input: string; user_phone: string }
         Returns: boolean
       }
     }
