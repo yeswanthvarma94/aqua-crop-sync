@@ -171,7 +171,19 @@ export default function Auth() {
         return;
       }
 
-      if (data?.success && data?.userId) {
+      if (data?.success && data?.session) {
+        // Set the session using the tokens from the response
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
+
+        if (sessionError) {
+          console.error('Session error:', sessionError);
+          setError('Failed to establish session');
+          return;
+        }
+
         setCurrentUserId(data.userId);
         
         // Check if user has MPIN after successful login
@@ -188,8 +200,6 @@ export default function Auth() {
           description: "Welcome back to AquaLedger.",
         });
         
-        // Refresh session
-        await supabase.auth.refreshSession();
         navigate('/');
       }
     } catch (error: any) {

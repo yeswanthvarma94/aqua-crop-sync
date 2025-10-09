@@ -84,28 +84,38 @@ Deno.serve(async (req) => {
       .update({ verified: true })
       .eq('id', otpRecord.id);
 
-    // Check if user exists in auth.users
-    const { data: { users }, error: userCheckError } = await supabase.auth.admin.listUsers();
-    
-    const existingUser = users?.find(u => u.phone === phone);
+    // Try to find existing user by querying profiles table
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles')
+      .select('user_id')
+      .eq('phone', phone)
+      .maybeSingle();
 
     let userId: string;
-    let session;
+    let accessToken: string;
+    let refreshToken: string;
 
-    if (existingUser) {
-      // User exists, generate session
-      userId = existingUser.id;
+    if (profileData?.user_id) {
+      // User exists - generate session tokens
+      userId = profileData.user_id;
       
-      // Create session for existing user
+      // Update phone_confirmed_at to mark phone as verified
+      const { error: updateError } = await supabase.auth.admin.updateUserById(
+        userId,
+        { phone_confirm: true }
+      );
+
+      if (updateError) {
+        console.error('Error updating user:', updateError);
+      }
+
+      // Generate access token for existing user
       const { data: sessionData, error: sessionError } = await supabase.auth.admin.generateLink({
         type: 'magiclink',
-        email: existingUser.email || `${phone.replace(/\D/g, '')}@temp.local`,
-        options: {
-          redirectTo: `${SUPABASE_URL}/auth/v1/callback`
-        }
+        email: `${phone.replace(/\D/g, '')}@temp.local`,
       });
 
-      if (sessionError) {
+      if (sessionError || !sessionData) {
         console.error('Session generation error:', sessionError);
         return new Response(
           JSON.stringify({ error: 'Failed to create session' }),
@@ -113,7 +123,9 @@ Deno.serve(async (req) => {
         );
       }
 
-      session = sessionData;
+      // Extract tokens from the properties object
+      accessToken = sessionData.properties?.access_token || '';
+      refreshToken = sessionData.properties?.refresh_token || '';
     } else {
       // Create new user
       const { data: newUserData, error: createError } = await supabase.auth.admin.createUser({
@@ -124,8 +136,24 @@ Deno.serve(async (req) => {
         }
       });
 
-      if (createError || !newUserData.user) {
+      if (createError) {
         console.error('User creation error:', createError);
+        
+        // If user exists error, try to recover by finding the user
+        if (createError.message?.includes('already registered')) {
+          return new Response(
+            JSON.stringify({ error: 'User already exists. Please try logging in again.' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        return new Response(
+          JSON.stringify({ error: 'Failed to create user account' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (!newUserData.user) {
         return new Response(
           JSON.stringify({ error: 'Failed to create user account' }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -140,11 +168,17 @@ Deno.serve(async (req) => {
         email: `${phone.replace(/\D/g, '')}@temp.local`,
       });
 
-      if (sessionError) {
+      if (sessionError || !sessionData) {
         console.error('Session generation error:', sessionError);
+        return new Response(
+          JSON.stringify({ error: 'Failed to create session' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
 
-      session = sessionData;
+      // Extract tokens
+      accessToken = sessionData.properties?.access_token || '';
+      refreshToken = sessionData.properties?.refresh_token || '';
     }
 
     return new Response(
@@ -152,6 +186,10 @@ Deno.serve(async (req) => {
         success: true,
         userId,
         phone,
+        session: {
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        },
         message: 'OTP verified successfully'
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
