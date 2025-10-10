@@ -23,7 +23,6 @@ import Stocks from "./pages/Stocks";
 import TankFeeding from "./pages/TankFeeding";
 import Reports from "./pages/Reports";
 import Auth from "./pages/Auth";
-import SignUp from "./pages/SignUp";
 import TestAuth from "./pages/TestAuth";
 import RecycleBin from "./pages/RecycleBin";
 import Calculators from "./pages/Calculators";
@@ -106,11 +105,10 @@ const App = () => (
           <SelectionProvider>
             <LoadingProvider>
               <LoadingWrapper>
-                <OAuthHandler />
+                 <OAuthHandler />
                  <Routes>
                   <Route path="/auth" element={<PublicOnlyRoute><Auth /></PublicOnlyRoute>} />
                   <Route path="/auth/callback" element={<AuthCallback />} />
-                  <Route path="/signup" element={<PublicOnlyRoute><SignUp /></PublicOnlyRoute>} />
                   <Route path="/test-auth" element={<TestAuth />} />
                   <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
                   <Route path="/feeding" element={<ProtectedRoute><Feeding /></ProtectedRoute>} />
