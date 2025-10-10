@@ -65,13 +65,13 @@ export default function Auth() {
     setError('');
 
     try {
-      const response = await supabase.functions.invoke('send-otp', {
-        body: { phoneNumber: phone }
+      const { error } = await supabase.auth.signInWithOtp({
+        phone: phone,
       });
 
-      if (response.error) {
-        console.error('OTP send error:', response.error);
-        setError(response.error.message || 'Failed to send OTP');
+      if (error) {
+        console.error('OTP send error:', error);
+        setError(error.message || 'Failed to send OTP');
         return;
       }
 
@@ -98,36 +98,23 @@ export default function Auth() {
     setError('');
 
     try {
-      const response = await supabase.functions.invoke('verify-otp', {
-        body: { phoneNumber: phone, otp }
+      const { error } = await supabase.auth.verifyOtp({
+        phone: phone,
+        token: otp,
+        type: 'sms'
       });
 
-      if (response.error) {
-        console.error('OTP verification error:', response.error);
-        setError(response.error.message || 'Invalid OTP');
+      if (error) {
+        console.error('OTP verification error:', error);
+        setError(error.message || 'Invalid OTP');
         return;
       }
 
-      const { data } = response;
-      
-      if (data?.session) {
-        const { error: sessionError } = await supabase.auth.setSession({
-          access_token: data.session.access_token,
-          refresh_token: data.session.refresh_token
-        });
-
-        if (sessionError) {
-          console.error('Session error:', sessionError);
-          setError('Failed to establish session');
-          return;
-        }
-
-        toast({
-          title: "Login successful!",
-          description: "Welcome to AquaLedger.",
-        });
-        navigate('/');
-      }
+      toast({
+        title: "Login successful!",
+        description: "Welcome to AquaLedger.",
+      });
+      navigate('/');
     } catch (error: any) {
       console.error('Unexpected error during OTP verification:', error);
       setError('An unexpected error occurred. Please try again.');
