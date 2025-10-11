@@ -273,6 +273,54 @@ export class SyncService {
         await db.stocks.bulkPut(offlineStocks);
       }
 
+      // Download feeding logs
+      const { data: feedingLogs } = await supabase
+        .from('feeding_logs')
+        .select('*')
+        .eq('account_id', accountId);
+
+      if (feedingLogs) {
+        await db.feedingLogs.clear();
+        const offlineFeedingLogs = feedingLogs.map(log => ({
+          ...log,
+          syncStatus: 'synced' as const,
+          lastModified: Date.now()
+        }));
+        await db.feedingLogs.bulkPut(offlineFeedingLogs);
+      }
+
+      // Download expenses
+      const { data: expenses } = await supabase
+        .from('expenses')
+        .select('*')
+        .eq('account_id', accountId);
+
+      if (expenses) {
+        await db.expenses.clear();
+        const offlineExpenses = expenses.map(expense => ({
+          ...expense,
+          syncStatus: 'synced' as const,
+          lastModified: Date.now()
+        }));
+        await db.expenses.bulkPut(offlineExpenses);
+      }
+
+      // Download material logs
+      const { data: materialLogs } = await supabase
+        .from('material_logs')
+        .select('*')
+        .eq('account_id', accountId);
+
+      if (materialLogs) {
+        await db.materialLogs.clear();
+        const offlineMaterialLogs = materialLogs.map(log => ({
+          ...log,
+          syncStatus: 'synced' as const,
+          lastModified: Date.now()
+        }));
+        await db.materialLogs.bulkPut(offlineMaterialLogs);
+      }
+
       console.log('User data downloaded successfully');
     } catch (error) {
       console.error('Failed to download user data:', error);
