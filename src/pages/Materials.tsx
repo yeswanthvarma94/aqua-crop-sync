@@ -502,11 +502,11 @@ const Materials = () => {
         {!location ? (
           <Card>
             <CardHeader>
-              <CardTitle>Select a location</CardTitle>
+              <CardTitle>Select a farm</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground mb-3">Choose a location to manage materials.</p>
-              <Button onClick={() => navigate("/locations")}>Go to Locations</Button>
+              <p className="text-sm text-muted-foreground mb-3">Choose a farm to manage materials.</p>
+              <Button onClick={() => navigate("/farms")}>Go to Farms</Button>
             </CardContent>
           </Card>
         ) : (

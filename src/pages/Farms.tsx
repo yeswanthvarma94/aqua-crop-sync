@@ -113,59 +113,16 @@ const Farms = () => {
   return (
     <div className="min-h-screen bg-background p-4">
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/")} className="shrink-0">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <h1 className="text-2xl font-bold">Farms</h1>
-          {!isOnline && (
-            <Badge variant="outline" className="bg-destructive/10 text-destructive">
-              Offline Mode
-            </Badge>
-          )}
-        </div>
-        
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={resetForm}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Farm
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{editing ? "Edit Farm" : "Add New Farm"}</DialogTitle>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="name" className="text-right">Name</Label>
-                <Input
-                  id="name"
-                  value={form.name}
-                  onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
-                  className="col-span-3"
-                  placeholder="Enter farm name"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="address" className="text-right">Address</Label>
-                <Input
-                  id="address"
-                  value={form.address}
-                  onChange={(e) => setForm(prev => ({ ...prev, address: e.target.value }))}
-                  className="col-span-3"
-                  placeholder="Enter address (optional)"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button onClick={onSubmit} disabled={!isValid}>
-                {editing ? "Update" : "Create"} Farm
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+      <div className="mb-6 flex items-center space-x-4">
+        <Button variant="ghost" size="icon" onClick={() => navigate("/")} className="shrink-0">
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <h1 className="text-2xl font-bold">Farms</h1>
+        {!isOnline && (
+          <Badge variant="outline" className="bg-destructive/10 text-destructive">
+            Offline Mode
+          </Badge>
+        )}
       </div>
 
       {/* Farms Table */}
@@ -234,6 +191,50 @@ const Farms = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Add Farm Button - Centered below table */}
+      <div className="flex justify-center mt-6">
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button onClick={resetForm}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Farm
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{editing ? "Edit Farm" : "Add New Farm"}</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="name" className="text-right">Name</Label>
+                <Input
+                  id="name"
+                  value={form.name}
+                  onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
+                  className="col-span-3"
+                  placeholder="Enter farm name"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="address" className="text-right">Address</Label>
+                <Input
+                  id="address"
+                  value={form.address}
+                  onChange={(e) => setForm(prev => ({ ...prev, address: e.target.value }))}
+                  className="col-span-3"
+                  placeholder="Enter address (optional)"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button onClick={onSubmit} disabled={!isValid}>
+                {editing ? "Update" : "Create"} Farm
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
     </div>
   );
 };
