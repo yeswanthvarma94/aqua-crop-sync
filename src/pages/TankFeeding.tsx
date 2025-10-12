@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { cropDayFromStartIST } from "@/lib/time";
 import { format } from "date-fns";
@@ -554,28 +555,30 @@ const TankFeeding = () => {
                 {entries.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No entries for this date.</p>
                 ) : (
-                  <ul className="space-y-2 text-sm">
-                    {entries.map((e) => (
-                      <li key={e.id} className="flex items-center justify-between rounded-md border p-3">
-                        <div className="flex items-center gap-3 flex-1">
-                          <Badge variant="secondary">{type === "shrimp" ? `S${e.schedule}` : `F${e.schedule}`}</Badge>
-                          <span>{e.quantity} {e.unit} • {e.stockName}</span>
-                          {e.notes && <span className="text-muted-foreground text-xs">({e.notes})</span>}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground">{e.time}</span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onEditFeeding(e)}
-                            className="h-6 w-6 p-0"
-                          >
-                            <Edit2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
+                  <ScrollArea className="h-[300px]">
+                    <ul className="space-y-2 text-sm pr-4">
+                      {entries.map((e) => (
+                        <li key={e.id} className="flex items-center justify-between rounded-md border p-3">
+                          <div className="flex items-center gap-3 flex-1">
+                            <Badge variant="secondary">{type === "shrimp" ? `S${e.schedule}` : `F${e.schedule}`}</Badge>
+                            <span>{e.quantity} {e.unit} • {e.stockName}</span>
+                            {e.notes && <span className="text-muted-foreground text-xs">({e.notes})</span>}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground">{e.time}</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => onEditFeeding(e)}
+                              className="h-6 w-6 p-0"
+                            >
+                              <Edit2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </ScrollArea>
                 )}
               </div>
             </div>
