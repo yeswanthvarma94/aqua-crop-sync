@@ -5,7 +5,7 @@ AquaLedger replaces manual books for shrimp and fish farmers with an offline‑f
 ## Key features (MVP)
 - Offline‑first with local database and background sync when online
 - Tabs: Dashboard, Feeding, Materials, Expenses, Settings
-- Global pickers (Farm, Tank) across tabs
+- Global pickers (Location, Tank) across tabs
 - Role-based access: Owner, Manager, Partner
 - Approval workflow for Manager edits (scaffolded)
 - WAC (Weighted Average Cost) stock accounting (scaffolded)
@@ -27,6 +27,10 @@ AquaLedger replaces manual books for shrimp and fish farmers with an offline‑f
 - Usage (feed/materials) deducts qty and cost at current WAC
 - Prevent negative stock; prompt to add stock when insufficient
 
+## Approval workflow (Manager edits)
+1. Manager edit creates `Approval` with `diffJson`, `status=pending`
+2. Owner approves/rejects with comment
+3. On approve, apply diff, write `AuditLog`, enqueue sync
 
 ## IST crop day counter
 - Day = floor((now_IST – start_IST)/1d) + 1; minimum 1

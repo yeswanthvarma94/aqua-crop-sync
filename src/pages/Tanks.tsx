@@ -485,6 +485,126 @@ const Tanks = () => {
     <main className="p-4 space-y-4">
       <header className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Tanks {location ? `— ${location.name}` : ""}</h1>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" size="sm" onClick={() => navigate("/")}>Home</Button>
+          <Button variant="outline" size="sm" onClick={() => navigate("/recycle-bin")}>Recycle Bin</Button>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm">Add Tank</Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle className="text-lg font-semibold">
+                  {editingTank ? "Edit Tank" : "Add Tank"}
+                </DialogTitle>
+              </DialogHeader>
+              <div className="grid gap-6 py-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="tankName">Tank Name</Label>
+                    <Input 
+                      id="tankName" 
+                      value={formName} 
+                      onChange={(e) => setFormName(e.target.value)} 
+                      placeholder="Enter tank name" 
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="tankType">Tank Type</Label>
+                    <Select value={formType} onValueChange={(v) => setFormType(v as "fish" | "shrimp")}>
+                      <SelectTrigger id="tankType">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="fish">Fish</SelectItem>
+                        <SelectItem value="shrimp">Shrimp</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label>Seed Date</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className="justify-start text-left font-normal">
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {formSeedDate ? format(formSeedDate, "PPP") : "Pick a date"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={formSeedDate}
+                          onSelect={setFormSeedDate}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="grid gap-2">
+                    {formType === "fish" ? (
+                      <>
+                        <Label htmlFor="seedWeight">Seed weight (g)</Label>
+                        <Input 
+                          id="seedWeight" 
+                          type="number"
+                          step="0.1"
+                          value={formSeedWeight} 
+                          onChange={(e) => setFormSeedWeight(e.target.value)} 
+                          placeholder="e.g. 2" 
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <Label htmlFor="plSize">PL Size</Label>
+                        <Input 
+                          id="plSize" 
+                          type="number"
+                          step="0.1"
+                          value={formPLSize} 
+                          onChange={(e) => setFormPLSize(e.target.value)} 
+                          placeholder="e.g. 10" 
+                        />
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="totalSeed">Total seed</Label>
+                    <Input 
+                      id="totalSeed" 
+                      type="number"
+                      value={formTotalSeed} 
+                      onChange={(e) => setFormTotalSeed(e.target.value)} 
+                      placeholder="e.g. 5000" 
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="area">Area (acres)</Label>
+                    <Input 
+                      id="area" 
+                      type="number"
+                      step="0.01"
+                      value={formArea} 
+                      onChange={(e) => setFormArea(e.target.value)} 
+                      placeholder="e.g. 1.50" 
+                    />
+                  </div>
+                </div>
+
+              </div>
+              <DialogFooter>
+                <Button onClick={onCreateTank} disabled={!isValid} className="bg-cyan-500 hover:bg-cyan-600 text-white">
+                  {editingTank ? "Update" : "Save"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </header>
 
       <Card>
@@ -572,126 +692,6 @@ const Tanks = () => {
           </Table>
         </CardContent>
       </Card>
-
-      {/* Add Tank Button - Centered below table */}
-      <div className="flex justify-center">
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm">Add Tank</Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="text-lg font-semibold">
-                {editingTank ? "Edit Tank" : "Add Tank"}
-              </DialogTitle>
-            </DialogHeader>
-            <div className="grid gap-6 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="tankName">Tank Name</Label>
-                  <Input 
-                    id="tankName" 
-                    value={formName} 
-                    onChange={(e) => setFormName(e.target.value)} 
-                    placeholder="Enter tank name" 
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="tankType">Tank Type</Label>
-                  <Select value={formType} onValueChange={(v) => setFormType(v as "fish" | "shrimp")}>
-                    <SelectTrigger id="tankType">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="fish">Fish</SelectItem>
-                      <SelectItem value="shrimp">Shrimp</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label>Seed Date</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className="justify-start text-left font-normal">
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {formSeedDate ? format(formSeedDate, "PPP") : "Pick a date"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={formSeedDate}
-                        onSelect={setFormSeedDate}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <div className="grid gap-2">
-                  {formType === "fish" ? (
-                    <>
-                      <Label htmlFor="seedWeight">Seed weight (g)</Label>
-                      <Input 
-                        id="seedWeight" 
-                        type="number"
-                        step="0.1"
-                        value={formSeedWeight} 
-                        onChange={(e) => setFormSeedWeight(e.target.value)} 
-                        placeholder="e.g. 2" 
-                      />
-                    </>
-                  ) : (
-                    <>
-                      <Label htmlFor="plSize">PL Size</Label>
-                      <Input 
-                        id="plSize" 
-                        type="number"
-                        step="0.1"
-                        value={formPLSize} 
-                        onChange={(e) => setFormPLSize(e.target.value)} 
-                        placeholder="e.g. 10" 
-                      />
-                    </>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="totalSeed">Total seed</Label>
-                  <Input 
-                    id="totalSeed" 
-                    type="number"
-                    value={formTotalSeed} 
-                    onChange={(e) => setFormTotalSeed(e.target.value)} 
-                    placeholder="e.g. 5000" 
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="area">Area (acres)</Label>
-                  <Input 
-                    id="area" 
-                    type="number"
-                    step="0.01"
-                    value={formArea} 
-                    onChange={(e) => setFormArea(e.target.value)} 
-                    placeholder="e.g. 1.50" 
-                  />
-                </div>
-              </div>
-
-            </div>
-            <DialogFooter>
-              <Button onClick={onCreateTank} disabled={!isValid} className="bg-cyan-500 hover:bg-cyan-600 text-white">
-                {editingTank ? "Update" : "Save"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
     </main>
   );
 };
