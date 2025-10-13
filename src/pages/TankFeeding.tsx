@@ -129,7 +129,7 @@ const TankFeeding = () => {
   const selectedStock = useMemo(() => feedStocks.find(s => s.id === selectedStockId), [feedStocks, selectedStockId]);
   const [schedule, setSchedule] = useState<string>("");
   const scheduleOptions = type === "shrimp" ? ["1","2","3","4"] : ["1"];
-  const [quantity, setQuantity] = useState<number>(0);
+  const [quantity, setQuantity] = useState<number | "">("");
   const [timeStr, setTimeStr] = useState<string>(() => {
     const d = new Date();
     const hh = `${d.getHours()}`.padStart(2, "0");
@@ -264,7 +264,8 @@ const TankFeeding = () => {
       toast({ title: "Select stock", description: "Choose feed stock to deduct from." });
       return;
     }
-    if (quantity <= 0) {
+    const numQuantity = Number(quantity);
+    if (!numQuantity || numQuantity <= 0) {
       toast({ title: "Invalid quantity", description: "Quantity must be greater than zero." });
       return;
     }
@@ -313,7 +314,7 @@ const TankFeeding = () => {
         const restoredQuantity = Number(currentStock.quantity) + Number(originalEntry.quantity);
         
         // Now subtract the new quantity
-        const finalQuantity = restoredQuantity - quantity;
+        const finalQuantity = restoredQuantity - Number(quantity);
         
         if (finalQuantity < 0) {
           throw new Error(`Insufficient stock. Available: ${restoredQuantity}, Required: ${quantity}`);
@@ -343,7 +344,7 @@ const TankFeeding = () => {
         if (feedingError) throw feedingError;
 
         // Update associated expense
-        const feedAmount = quantity * weightedAvgPrice;
+        const feedAmount = Number(quantity) * weightedAvgPrice;
         const incurredDate = feedingTime.toISOString().slice(0, 10);
         
         await supabase
@@ -380,14 +381,14 @@ const TankFeeding = () => {
         if (feedingError) throw feedingError;
 
         // Update stock quantity in database
-        const nextQty = Math.max(0, selectedStock.quantity - quantity);
+        const nextQty = Math.max(0, selectedStock.quantity - Number(quantity));
         await supabase
           .from("stocks")
           .update({ quantity: nextQty })
           .eq("id", selectedStock.id);
 
         // Create an expense row for consumed feed
-        const feedAmount = quantity * weightedAvgPrice;
+        const feedAmount = Number(quantity) * weightedAvgPrice;
         const incurredDate = feedingTime.toISOString().slice(0, 10);
         await supabase
           .from("expenses")

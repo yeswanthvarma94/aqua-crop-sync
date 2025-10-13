@@ -323,7 +323,7 @@ const Expenses = () => {
   // Form state
   const [category, setCategory] = useState<ExpenseCategory>("manpower");
   const [customName, setCustomName] = useState("");
-  const [amount, setAmount] = useState<number>(0);
+  const [amount, setAmount] = useState<number | "">("");
   const [dateStr, setDateStr] = useState<string>(todayKey);
   const [timeStr, setTimeStr] = useState<string>(() => {
     const d = new Date();
@@ -450,7 +450,8 @@ const Expenses = () => {
 
   const onAdd = async () => {
     if (!accountId || !location?.id || !tank?.id) return;
-    if (amount <= 0) {
+    const numAmount = Number(amount);
+    if (!numAmount || numAmount <= 0) {
       toast({ title: "Invalid amount", description: "Enter a positive amount." });
       return;
     }
@@ -534,7 +535,7 @@ const Expenses = () => {
       
       toast({ 
         title: editingExpense ? "Updated" : "Saved", 
-        description: `${name} — ₹${amount.toFixed(2)}` 
+        description: `${name} — ₹${Number(amount).toFixed(2)}` 
       });
     } catch (error: any) {
       console.error(`Failed to ${editingExpense ? "update" : "create"} expense:`, error);
@@ -621,13 +622,13 @@ const Expenses = () => {
                 </div>
 
                 <div className="mt-4 flex gap-2">
-                  <Button onClick={onAdd} disabled={amount <= 0}>
+                  <Button onClick={onAdd} disabled={!amount || Number(amount) <= 0}>
                     {editingExpense ? "Update" : "Add"} Expense
                   </Button>
                   {editingExpense && (
                     <Button variant="outline" onClick={() => {
                       setEditingExpense(null);
-                      setAmount(0);
+                      setAmount("");
                       setNotes("");
                       setCustomName("");
                       setCategory("manpower");

@@ -150,7 +150,7 @@ const TankDetailPage = () => {
   const selectedStock = useMemo(() => feedStocks.find(s => s.id === selectedStockId), [feedStocks, selectedStockId]);
   const [schedule, setSchedule] = useState<string>("");
   const scheduleOptions = type === "shrimp" ? ["1","2","3","4"] : ["1"];
-  const [quantity, setQuantity] = useState<number>(0);
+  const [quantity, setQuantity] = useState<number | "">("");
   const [timeStr, setTimeStr] = useState<string>(() => {
     const d = new Date();
     const hh = `${d.getHours()}`.padStart(2, "0");
@@ -164,9 +164,9 @@ const TankDetailPage = () => {
   // Add Stock modal
   const [addOpen, setAddOpen] = useState(false);
   const [newStockName, setNewStockName] = useState("");
-  const [newStockQty, setNewStockQty] = useState<number>(0);
+  const [newStockQty, setNewStockQty] = useState<number | "">("");
   const [newStockUnit, setNewStockUnit] = useState<StockRecord["unit"]>("kg");
-  const [newStockPpu, setNewStockPpu] = useState<number>(0);
+  const [newStockPpu, setNewStockPpu] = useState<number | "">("");
 
   // Load existing active crop if any
   useEffect(() => {
@@ -289,11 +289,12 @@ const TankDetailPage = () => {
       toast({ title: "Select stock", description: "Choose feed stock to deduct from." });
       return;
     }
-    if (quantity <= 0) {
+    const numQuantity = Number(quantity);
+    if (!numQuantity || numQuantity <= 0) {
       toast({ title: "Invalid quantity", description: "Quantity must be greater than zero." });
       return;
     }
-    if (quantity > remainingStock) {
+    if (numQuantity > remainingStock) {
       toast({ title: "Insufficient stock", description: `Only ${remainingStock} ${selectedStock.unit} remaining.` });
       return;
     }
@@ -303,7 +304,7 @@ const TankDetailPage = () => {
       schedule,
       stockName: selectedStock.name,
       unit: selectedStock.unit,
-      quantity,
+      quantity: numQuantity,
       time: timeStr,
       notes: notes || undefined,
       createdAt: new Date().toISOString(),
@@ -316,14 +317,14 @@ const TankDetailPage = () => {
     const idx = sList.findIndex(s => s.id === selectedStock.id);
     if (idx >= 0) {
       const cur = sList[idx];
-      sList[idx] = { ...cur, quantity: Math.max(0, cur.quantity - quantity), updatedAt: new Date().toISOString() };
+      sList[idx] = { ...cur, quantity: Math.max(0, cur.quantity - numQuantity), updatedAt: new Date().toISOString() };
       saveStocks(locationId, sList);
       setStocks(sList);
     }
 
     setEntries(list);
     setSchedule("");
-    setQuantity(0);
+    setQuantity("");
     setNotes("");
     setRev(r => r + 1);
     toast({ title: "Feeding saved", description: `Schedule ${entry.schedule} recorded.` });
@@ -336,24 +337,26 @@ const TankDetailPage = () => {
       toast({ title: "Missing name", description: "Enter stock name." });
       return;
     }
-    if (newStockQty <= 0) {
+    const numQty = Number(newStockQty);
+    const numPpu = Number(newStockPpu);
+    if (!numQty || numQty <= 0) {
       toast({ title: "Invalid quantity", description: "Quantity must be greater than zero." });
       return;
     }
-    if (newStockPpu < 0) {
+    if (numPpu < 0) {
       toast({ title: "Invalid price", description: "Price per unit cannot be negative." });
       return;
     }
     const list = loadStocks(locationId);
     // Merge by name+category+unit (feed only)
     const idx = list.findIndex(s => s.name.toLowerCase() === name.toLowerCase() && s.category === "feed" && s.unit === newStockUnit);
-    const amount = newStockQty * newStockPpu;
+    const amount = numQty * numPpu;
     const now = new Date().toISOString();
     if (idx >= 0) {
       const s = list[idx];
-      list[idx] = { ...s, quantity: s.quantity + newStockQty, totalAmount: s.totalAmount + amount, pricePerUnit: newStockPpu, updatedAt: now };
+      list[idx] = { ...s, quantity: s.quantity + numQty, totalAmount: s.totalAmount + amount, pricePerUnit: numPpu, updatedAt: now };
     } else {
-      list.unshift({ id: crypto.randomUUID(), name, category: "feed", unit: newStockUnit, quantity: newStockQty, pricePerUnit: newStockPpu, totalAmount: amount, minStock: 0, createdAt: now, updatedAt: now });
+      list.unshift({ id: crypto.randomUUID(), name, category: "feed", unit: newStockUnit, quantity: numQty, pricePerUnit: numPpu, totalAmount: amount, minStock: 0, createdAt: now, updatedAt: now });
     }
     saveStocks(locationId, list);
     setStocks(list);

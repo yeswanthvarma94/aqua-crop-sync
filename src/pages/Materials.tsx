@@ -75,7 +75,7 @@ const Materials = () => {
   const nonFeedStocks = useMemo(() => stocks.filter(s => s.category !== "feed"), [stocks]);
   const [selectedStockId, setSelectedStockId] = useState<string>("");
   const selectedStock = useMemo(() => nonFeedStocks.find(s => s.id === selectedStockId), [nonFeedStocks, selectedStockId]);
-  const [quantity, setQuantity] = useState<number>(0);
+  const [quantity, setQuantity] = useState<number | "">("");
   const [timeStr, setTimeStr] = useState<string>(() => {
     const d = new Date();
     const hh = `${d.getHours()}`.padStart(2, "0");
@@ -283,11 +283,12 @@ const Materials = () => {
       toast({ title: "Select material", description: "Choose a material stock." });
       return;
     }
-    if (quantity <= 0) {
+    const numQuantity = Number(quantity);
+    if (!numQuantity || numQuantity <= 0) {
       toast({ title: "Invalid quantity", description: "Quantity must be greater than zero." });
       return;
     }
-    if (quantity > remaining) {
+    if (numQuantity > remaining) {
       toast({ title: "Insufficient stock", description: `Only ${remaining} ${selectedStock.unit} remaining.` });
       return;
     }
@@ -329,7 +330,7 @@ const Materials = () => {
         const restoredQuantity = Number(currentStock.quantity) + Number(originalEntry.quantity);
         
         // 3) Subtract new quantity
-        const finalQuantity = restoredQuantity - quantity;
+        const finalQuantity = restoredQuantity - Number(quantity);
         
         if (finalQuantity < 0) {
           throw new Error(`Insufficient stock. Available: ${restoredQuantity}, Required: ${quantity}`);
@@ -358,7 +359,7 @@ const Materials = () => {
         if (updateError) throw updateError;
 
         // 6) Update associated expense
-        const materialAmount = quantity * weightedAvgPrice;
+        const materialAmount = Number(quantity) * weightedAvgPrice;
         const incurredDate = loggedAt.toISOString().slice(0, 10);
         
         await supabase
@@ -433,7 +434,7 @@ const Materials = () => {
         console.log("Stock updated successfully:", stockUpdateData?.[0]);
 
         // 3) Create expense for material usage
-        const materialAmount = quantity * weightedAvgPrice;
+        const materialAmount = Number(quantity) * weightedAvgPrice;
         const incurredDate = loggedAt.toISOString().slice(0, 10);
         
         const { data: expenseData, error: expenseError } = await supabase
@@ -562,7 +563,7 @@ const Materials = () => {
                 </div>
 
                 <div className="mt-4 flex gap-2">
-                  <Button onClick={saveUsage} disabled={!tank?.id || !selectedStock || quantity <= 0 || quantity > remaining}>
+                  <Button onClick={saveUsage} disabled={!tank?.id || !selectedStock || !quantity || Number(quantity) <= 0 || Number(quantity) > remaining}>
                     {editingMaterial ? "Update" : "Save"}
                   </Button>
                   {editingMaterial && (

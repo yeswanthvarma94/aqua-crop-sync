@@ -70,9 +70,9 @@ const Stocks = () => {
   const [otherName, setOtherName] = useState("");
   const [category, setCategory] = useState<StockRecord["category"]>("feed");
   const [unit, setUnit] = useState<StockRecord["unit"]>("kg");
-  const [quantity, setQuantity] = useState<number>(0);
-  const [pricePerUnit, setPricePerUnit] = useState<number>(0);
-  const [minStock, setMinStock] = useState<number>(0);
+  const [quantity, setQuantity] = useState<number | "">("");
+  const [pricePerUnit, setPricePerUnit] = useState<number | "">("");
+  const [minStock, setMinStock] = useState<number | "">("");
   const [expiry, setExpiry] = useState<Date | undefined>(undefined);
   const [notes, setNotes] = useState<string>("");
 
@@ -114,9 +114,9 @@ const Stocks = () => {
       setOtherName("");
       setCategory("feed");
       setUnit("kg");
-      setQuantity(0);
-      setPricePerUnit(0);
-      setMinStock(0);
+      setQuantity("");
+      setPricePerUnit("");
+      setMinStock("");
       setExpiry(undefined);
       setNotes("");
       setEditingStock(null);
@@ -226,8 +226,8 @@ const Stocks = () => {
           
           handleOpen(false);
           setSelectedName(""); setOtherName(""); setIsOther(false);
-          setCategory("feed"); setUnit("kg"); setQuantity(0);
-          setPricePerUnit(0); setMinStock(0); setExpiry(undefined); setNotes("");
+          setCategory("feed"); setUnit("kg"); setQuantity("");
+          setPricePerUnit(""); setMinStock(""); setExpiry(undefined); setNotes("");
           
           toast({ 
             title: "Stock Updated", 
@@ -293,9 +293,9 @@ const Stocks = () => {
       setIsOther(false);
       setCategory("feed");
       setUnit("kg");
-      setQuantity(0);
-      setPricePerUnit(0);
-      setMinStock(0);
+      setQuantity("");
+      setPricePerUnit("");
+      setMinStock("");
       setExpiry(undefined);
       setNotes("");
       setEditingStock(null);
