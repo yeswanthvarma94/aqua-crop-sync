@@ -73,6 +73,44 @@ export type Database = {
         }
         Relationships: []
       }
+      audit_logs: {
+        Row: {
+          account_id: string | null
+          action: string
+          created_at: string
+          details: Json | null
+          id: string
+          ip_address: string | null
+          user_id: string | null
+        }
+        Insert: {
+          account_id?: string | null
+          action: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          ip_address?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          account_id?: string | null
+          action?: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          ip_address?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       expenses: {
         Row: {
           account_id: string
@@ -445,6 +483,39 @@ export type Database = {
           },
         ]
       }
+      subscriptions: {
+        Row: {
+          created_at: string
+          expires_at: string | null
+          id: string
+          plan_type: Database["public"]["Enums"]["subscription_plan"]
+          status: string
+          stripe_subscription_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          plan_type?: Database["public"]["Enums"]["subscription_plan"]
+          status?: string
+          stripe_subscription_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          plan_type?: Database["public"]["Enums"]["subscription_plan"]
+          status?: string
+          stripe_subscription_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       tank_crops: {
         Row: {
           account_id: string
@@ -594,6 +665,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_add_team_member: {
+        Args: { account_uuid: string; user_uuid: string }
+        Returns: boolean
+      }
       cleanup_expired_otps: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -623,17 +698,36 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_user_subscription: {
+        Args: { user_uuid: string }
+        Returns: Database["public"]["Enums"]["subscription_plan"]
+      }
       is_enterprise_owner: {
         Args: { user_uuid: string }
         Returns: boolean
+      }
+      log_audit_event: {
+        Args: {
+          p_account_id: string
+          p_action: string
+          p_details: Json
+          p_ip_address: string
+          p_user_id: string
+        }
+        Returns: undefined
       }
       validate_phone_number: {
         Args: { phone_text: string }
         Returns: boolean
       }
+      verify_account_owner: {
+        Args: { account_uuid: string; user_uuid: string }
+        Returns: boolean
+      }
     }
     Enums: {
       membership_role: "owner" | "manager" | "partner"
+      subscription_plan: "free" | "pro" | "enterprise"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -762,6 +856,7 @@ export const Constants = {
   public: {
     Enums: {
       membership_role: ["owner", "manager", "partner"],
+      subscription_plan: ["free", "pro", "enterprise"],
     },
   },
 } as const

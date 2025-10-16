@@ -80,7 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const role = (await getMembershipRole(accId, sUser.id)) || "owner";
             setUser((prev) => (prev ? { ...prev, role } : prev));
           } catch (e) {
-            console.error("Account bootstrap failed:", e);
+            if (import.meta.env.DEV) console.error("Account bootstrap failed:", e);
           }
         }, 0);
       } else {
@@ -118,7 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const role = (await getMembershipRole(accId, sUser.id)) || "owner";
             setUser((prev) => (prev ? { ...prev, role } : prev));
           } catch (e) {
-            console.error("Account bootstrap failed:", e);
+            if (import.meta.env.DEV) console.error("Account bootstrap failed:", e);
           }
         }, 0);
       }

@@ -9,11 +9,19 @@ const corsHeaders = {
 
 interface CreateUserReq {
   accountId: string;
-  username: string; // Phone number
+  username: string;
   role: "manager" | "partner";
-  name: string; // Full name of the user
-  otpToken?: string; // OTP token for verification
-  skipOtpVerification?: boolean; // Skip OTP verification if signups not allowed
+  name: string;
+  otpToken?: string;
+  skipOtpVerification?: boolean;
+}
+
+// Secure password generator using Web Crypto API
+function generateSecurePassword(length: number = 24): string {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=[]{}|;:,.<>?";
+  const array = new Uint8Array(length);
+  crypto.getRandomValues(array);
+  return Array.from(array).map(x => chars[x % chars.length]).join('');
 }
 
 serve(async (req) => {
@@ -24,146 +32,158 @@ serve(async (req) => {
     const { accountId, username, role, name, otpToken, skipOtpVerification = true } = body || {} as any;
 
     if (!accountId || !username || !role || !name) {
-      return new Response(JSON.stringify({ error: "Missing fields" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
+      return new Response(JSON.stringify({ error: "Missing required fields" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
-    // Validate phone number format for username
     const phoneNumber = String(username).trim();
     if (!/^[+]?[1-9]\d{7,14}$/.test(phoneNumber.replace(/[\s\-]/g, ''))) {
-      return new Response(JSON.stringify({ error: "Username must be a valid phone number" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
+      return new Response(JSON.stringify({ error: "Invalid phone number format" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
     
-    // Validate name
     if (!name || String(name).trim().length < 2) {
       return new Response(JSON.stringify({ error: "Name must be at least 2 characters" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
     
     if (!["manager", "partner"].includes(role)) {
-      return new Response(JSON.stringify({ error: "Role must be manager or partner" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
+      return new Response(JSON.stringify({ error: "Invalid role specified" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    
     if (!serviceKey) {
-      return new Response(JSON.stringify({ error: "Missing service role key" }), { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } });
+      if (import.meta.env.DEV) console.error("Missing service role key");
+      return new Response(JSON.stringify({ error: "Configuration error" }), { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
-    // User-scoped client (to evaluate RLS and ensure caller is the owner)
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: req.headers.get("Authorization")! } },
     });
 
-    // Service client for admin auth operations
-    const adminClient = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
-
-    // Verify caller is owner of account
-    const { data: ownerCheck, error: ownerErr } = await userClient
-      .from("accounts")
-      .select("id")
-      .eq("id", accountId)
-      .limit(1)
-      .maybeSingle();
-    if (ownerErr || !ownerCheck) {
-      return new Response(JSON.stringify({ error: "Only owner can add team members" }), { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } });
+    // Verify authentication
+    const { data: { user: authUser }, error: authError } = await userClient.auth.getUser();
+    if (authError || !authUser) {
+      return new Response(JSON.stringify({ error: "Authentication required" }), { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
-    // Check if the same phone is already used as a username in this account
+    // Verify ownership using secure function
+    const { data: isOwner, error: ownerCheckErr } = await userClient.rpc("verify_account_owner", {
+      account_uuid: accountId,
+      user_uuid: authUser.id
+    });
+
+    if (ownerCheckErr || !isOwner) {
+      if (import.meta.env.DEV) console.error("Ownership verification failed:", ownerCheckErr);
+      return new Response(JSON.stringify({ error: "Access denied" }), { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } });
+    }
+
+    // Check if user can add team member (plan verification)
+    const { data: canAdd, error: planCheckErr } = await userClient.rpc("can_add_team_member", {
+      account_uuid: accountId,
+      user_uuid: authUser.id
+    });
+
+    if (planCheckErr) {
+      if (import.meta.env.DEV) console.error("Plan check failed:", planCheckErr);
+      return new Response(JSON.stringify({ error: "Unable to verify subscription plan" }), { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } });
+    }
+
+    if (!canAdd) {
+      return new Response(JSON.stringify({ error: "Your subscription plan does not allow adding team members or member limit reached" }), { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } });
+    }
+
+    // Check existing username
     const { data: existingUsername } = await userClient
       .from("usernames")
       .select("username")
       .eq("account_id", accountId)
       .eq("username", phoneNumber)
       .maybeSingle();
+
     if (existingUsername) {
       return new Response(JSON.stringify({ error: "This phone number is already added to this account" }), { status: 409, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
-    // See if a user already exists with this phone (via profiles; service role bypasses RLS)
+    const adminClient = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
+
+    // Check existing profile by phone
     const { data: existingProfile, error: profileLookupErr } = await adminClient
       .from("profiles")
       .select("user_id")
       .eq("phone", phoneNumber)
       .maybeSingle();
-    if (profileLookupErr) {
+
+    if (profileLookupErr && import.meta.env.DEV) {
       console.log("Profile lookup error:", profileLookupErr);
     }
-
-    // Note: We intentionally do not query auth.users via PostgREST.
-    // If a user with this phone exists, we'll detect it below when creating the auth user
-    // and then fall back to the existing profile to get the user_id.
-
-    // Check current member count (trigger also enforces)
-    const { count } = await userClient
-      .from("account_members")
-      .select("user_id", { count: "exact", head: true })
-      .eq("account_id", accountId);
-    if ((count ?? 0) >= 5) {
-      return new Response(JSON.stringify({ error: "Member limit reached (max 5 including owner)" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
-    }
-
 
     // If OTP token is provided and not skipping verification, verify it first
     if (otpToken && !skipOtpVerification) {
       try {
-        const { data: verifyData, error: verifyErr } = await adminClient.auth.verifyOtp({
+        const { error: verifyErr } = await adminClient.auth.verifyOtp({
           phone: phoneNumber,
           token: otpToken,
           type: 'sms'
         });
         
         if (verifyErr) {
-          return new Response(JSON.stringify({ error: "Invalid OTP: " + verifyErr.message }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
+          return new Response(JSON.stringify({ error: "Invalid OTP code" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
         }
       } catch (otpErr: any) {
-        return new Response(JSON.stringify({ error: "OTP verification failed: " + otpErr.message }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
+        if (import.meta.env.DEV) console.error("OTP verification error:", otpErr);
+        return new Response(JSON.stringify({ error: "OTP verification failed" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
       }
     }
 
-    // Determine target user: use existing profile by phone if available; otherwise create a new auth user
-    let tempPassword: string | undefined;
+    // Determine target user
     let newUserId = existingProfile?.user_id as string | undefined;
 
     if (!newUserId) {
-      tempPassword = crypto.randomUUID().substring(0, 12) + "!Aa1";
+      // Generate secure password (24 characters with full character diversity)
+      const tempPassword = generateSecurePassword(24);
+      
       const { data: created, error: createErr } = await adminClient.auth.admin.createUser({
         phone: phoneNumber,
         password: tempPassword,
         phone_confirm: true,
         user_metadata: { username: phoneNumber, name: String(name).trim() },
       });
+      
       if (createErr || !created?.user) {
-        console.error("Failed to create auth user:", createErr);
-        // If phone already exists, look up the existing profile and reuse it
+        if (import.meta.env.DEV) console.error("Failed to create auth user:", createErr);
+        
+        // If phone already exists, look up the existing profile
         if (createErr?.status === 422 || createErr?.message?.toLowerCase().includes("phone") || createErr?.message?.toLowerCase().includes("exists")) {
           const { data: prof2 } = await adminClient
             .from("profiles")
             .select("user_id")
             .eq("phone", phoneNumber)
             .maybeSingle();
+          
           if (!prof2) {
             return new Response(JSON.stringify({ error: "Phone number already registered" }), { status: 409, headers: { "Content-Type": "application/json", ...corsHeaders } });
           }
           newUserId = prof2.user_id as string;
-          tempPassword = undefined; // existing user; no temp password generated
         } else {
-          return new Response(JSON.stringify({ error: createErr?.message || "Failed to create auth user" }), { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } });
+          return new Response(JSON.stringify({ error: "Failed to create user account" }), { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } });
         }
       } else {
         newUserId = created.user.id;
       }
     }
 
-    // Ensure a profile exists and update basic fields
+    // Ensure profile exists
     const { error: profileUpsertErr } = await adminClient
       .from("profiles")
       .upsert({ user_id: newUserId as string, name: String(name).trim(), phone: phoneNumber }, { onConflict: "user_id" });
+    
     if (profileUpsertErr) {
-      console.error("Failed to upsert user profile:", profileUpsertErr);
-      return new Response(JSON.stringify({ error: "Failed to update user profile: " + profileUpsertErr.message }), { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } });
+      if (import.meta.env.DEV) console.error("Failed to upsert user profile:", profileUpsertErr);
+      return new Response(JSON.stringify({ error: "Failed to update user profile" }), { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
-    // Ensure membership exists (update role if already a member)
+    // Ensure membership exists
     const { data: existingMem } = await userClient
       .from("account_members")
       .select("id, role")
@@ -178,16 +198,18 @@ serve(async (req) => {
           .update({ role })
           .eq("account_id", accountId)
           .eq("user_id", newUserId as string);
+        
         if (updErr) {
-          return new Response(JSON.stringify({ error: updErr.message }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
+          return new Response(JSON.stringify({ error: "Failed to update member role" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
         }
       }
     } else {
       const { error: memErr } = await userClient
         .from("account_members")
         .insert({ account_id: accountId, user_id: newUserId as string, role });
+      
       if (memErr) {
-        return new Response(JSON.stringify({ error: memErr.message }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
+        return new Response(JSON.stringify({ error: "Failed to add team member" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
       }
     }
 
@@ -195,27 +217,39 @@ serve(async (req) => {
     const { error: mapErr } = await userClient
       .from("usernames")
       .insert({ user_id: newUserId, account_id: accountId, username: phoneNumber });
+    
     if (mapErr) {
-      return new Response(JSON.stringify({ error: mapErr.message }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
+      return new Response(JSON.stringify({ error: "Failed to create username mapping" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
-    // Send OTP to the new user for initial login setup (if not skipping verification)
+    // Log audit event
+    const clientIp = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
+    try {
+      await adminClient.rpc("log_audit_event", {
+        p_user_id: authUser.id,
+        p_account_id: accountId,
+        p_action: "team_member_added",
+        p_details: { added_user_id: newUserId, username: phoneNumber, role },
+        p_ip_address: clientIp
+      });
+    } catch (auditErr) {
+      if (import.meta.env.DEV) console.error("Audit log failed:", auditErr);
+    }
+
+    // Send OTP for login (never return password in response)
     if (!skipOtpVerification) {
       try {
         await adminClient.auth.signInWithOtp({
           phone: phoneNumber,
-          options: {
-            shouldCreateUser: false
-          }
+          options: { shouldCreateUser: false }
         });
       } catch (otpErr) {
-        // Don't fail if OTP sending fails, but log it
-        console.log("Failed to send setup OTP:", otpErr);
+        if (import.meta.env.DEV) console.log("Failed to send setup OTP:", otpErr);
       }
     }
 
     const setupMessage = skipOtpVerification 
-      ? "Team member created successfully with temporary password. They can log in using their phone number."
+      ? "Team member created successfully. They can log in using their phone number."
       : "Team member created successfully. They will receive an OTP for initial login setup.";
 
     return new Response(JSON.stringify({ 
@@ -224,14 +258,16 @@ serve(async (req) => {
       username: phoneNumber, 
       name: String(name).trim(), 
       role,
-      tempPassword: skipOtpVerification ? tempPassword : undefined,
       message: setupMessage
     }), {
       status: 200,
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });
   } catch (err: any) {
-    console.error("team-create-user error", err);
-    return new Response(JSON.stringify({ error: err?.message || "Unexpected error" }), { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } });
+    if (import.meta.env.DEV) console.error("team-create-user error:", err);
+    return new Response(JSON.stringify({ error: "An error occurred while processing your request" }), { 
+      status: 500, 
+      headers: { "Content-Type": "application/json", ...corsHeaders } 
+    });
   }
 });

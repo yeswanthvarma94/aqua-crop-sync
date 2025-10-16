@@ -18,30 +18,38 @@ serve(async (req) => {
   try {
     const { accountId, username }: ResetReq = await req.json();
     if (!accountId || !username) {
-      return new Response(JSON.stringify({ error: "Missing fields" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
+      return new Response(JSON.stringify({ error: "Missing required fields" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
     const uname = String(username).trim().toLowerCase();
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    
     if (!serviceKey) {
-      return new Response(JSON.stringify({ error: "Missing service role key" }), { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } });
+      console.error("Missing service role key");
+      return new Response(JSON.stringify({ error: "Configuration error" }), { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: req.headers.get("Authorization")! } },
     });
 
-    // Verify caller is owner for the account
-    const { data: ownerCheck } = await userClient
-      .from("accounts")
-      .select("id")
-      .eq("id", accountId)
-      .limit(1)
-      .maybeSingle();
-    if (!ownerCheck) {
-      return new Response(JSON.stringify({ error: "Only owner can reset passwords" }), { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } });
+    // Verify authentication
+    const { data: { user: authUser }, error: authError } = await userClient.auth.getUser();
+    if (authError || !authUser) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } });
+    }
+
+    // Verify ownership using secure function
+    const { data: isOwner, error: ownerCheckErr } = await userClient.rpc("verify_account_owner", {
+      account_uuid: accountId,
+      user_uuid: authUser.id
+    });
+
+    if (ownerCheckErr || !isOwner) {
+      console.error("Ownership verification failed");
+      return new Response(JSON.stringify({ error: "Access denied" }), { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
     // Find mapping
@@ -51,13 +59,15 @@ serve(async (req) => {
       .eq("account_id", accountId)
       .eq("username", uname)
       .maybeSingle();
+    
     if (mapErr || !mapping) {
-      return new Response(JSON.stringify({ error: "User not found in this account" }), { status: 404, headers: { "Content-Type": "application/json", ...corsHeaders } });
+      console.error("User mapping not found");
+      return new Response(JSON.stringify({ error: "User not found" }), { status: 404, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
     const adminClient = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
     
-    // Send password reset OTP to the user's phone number
+    // Send password reset OTP
     const { error: otpErr } = await adminClient.auth.signInWithOtp({
       phone: username,
       options: {
@@ -66,18 +76,32 @@ serve(async (req) => {
     });
     
     if (otpErr) {
-      return new Response(JSON.stringify({ error: "Failed to send reset OTP: " + otpErr.message }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
+      console.error("Failed to send OTP");
+      return new Response(JSON.stringify({ error: "Failed to send password reset code" }), { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
+
+    // Log audit event
+    const clientIp = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
+    await adminClient.rpc("log_audit_event", {
+      p_user_id: authUser.id,
+      p_account_id: accountId,
+      p_action: "password_reset_requested",
+      p_details: { target_user_id: mapping.user_id, username: uname },
+      p_ip_address: clientIp
+    });
 
     return new Response(JSON.stringify({ 
       ok: true, 
-      message: `Password reset OTP sent to ${username}` 
+      message: "Password reset code sent successfully" 
     }), { 
       status: 200, 
       headers: { "Content-Type": "application/json", ...corsHeaders } 
     });
   } catch (err: any) {
-    console.error("team-reset-password error", err);
-    return new Response(JSON.stringify({ error: err?.message || "Unexpected error" }), { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } });
+    console.error("team-reset-password error:", err);
+    return new Response(JSON.stringify({ error: "An error occurred while processing your request" }), { 
+      status: 500, 
+      headers: { "Content-Type": "application/json", ...corsHeaders } 
+    });
   }
 });

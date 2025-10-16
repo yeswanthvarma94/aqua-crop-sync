@@ -77,9 +77,49 @@ const Settings = () => {
   const { user, accountId, signInDev, signOut, isDevLoginEnabled } = useAuth();
   const { toast } = useToast();
 
-  // Plan
-  const [plan, setPlan] = useState<Plan>(() => loadPlan());
-  useEffect(() => { savePlan(plan); }, [plan]);
+  // Plan - load from database, not localStorage
+  const [plan, setPlan] = useState<Plan>('Free');
+  const [loadingPlan, setLoadingPlan] = useState(true);
+
+  // Load subscription plan from database
+  useEffect(() => {
+    const loadSubscription = async () => {
+      if (!user?.id) {
+        setLoadingPlan(false);
+        return;
+      }
+      
+      try {
+        const { data, error } = await supabase
+          .from('subscriptions')
+          .select('plan_type')
+          .eq('user_id', user.id)
+          .eq('status', 'active')
+          .maybeSingle();
+
+        if (error) {
+          if (import.meta.env.DEV) console.error('Error loading subscription:', error);
+          setLoadingPlan(false);
+          return;
+        }
+
+        if (data) {
+          const planMap: Record<string, Plan> = {
+            'free': 'Free',
+            'pro': 'Pro',
+            'enterprise': 'Enterprise'
+          };
+          setPlan(planMap[data.plan_type] || 'Free');
+        }
+      } catch (e) {
+        if (import.meta.env.DEV) console.error('Subscription load error:', e);
+      } finally {
+        setLoadingPlan(false);
+      }
+    };
+
+    loadSubscription();
+  }, [user?.id]);
 
   // Compute plan limits for UI
   type PlanLimits = { team: boolean; locations: number | "Unlimited"; tanksPerLoc: number | "Unlimited"; price: string; originalPrice: string };
@@ -147,7 +187,7 @@ const Settings = () => {
       setTeam(rows);
       setMemberCount(rows.length);
     } catch (error) {
-      console.error('Error fetching team members:', error);
+      if (import.meta.env.DEV) console.error('Error fetching team members:', error);
       setTeam([]);
       setMemberCount(0);
     }
