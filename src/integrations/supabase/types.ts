@@ -669,26 +669,14 @@ export type Database = {
         Args: { account_uuid: string; user_uuid: string }
         Returns: boolean
       }
-      cleanup_expired_otps: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      cleanup_old_deleted_tanks: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      cleanup_expired_otps: { Args: never; Returns: undefined }
+      cleanup_old_deleted_tanks: { Args: never; Returns: undefined }
       current_user_is_account_member: {
         Args: { aid: string }
         Returns: boolean
       }
-      current_user_is_account_owner: {
-        Args: { aid: string }
-        Returns: boolean
-      }
-      delete_user_account: {
-        Args: { user_uuid: string }
-        Returns: undefined
-      }
+      current_user_is_account_owner: { Args: { aid: string }; Returns: boolean }
+      delete_user_account: { Args: { user_uuid: string }; Returns: undefined }
       get_team_members: {
         Args: { account_id_param: string }
         Returns: {
@@ -702,10 +690,7 @@ export type Database = {
         Args: { user_uuid: string }
         Returns: Database["public"]["Enums"]["subscription_plan"]
       }
-      is_enterprise_owner: {
-        Args: { user_uuid: string }
-        Returns: boolean
-      }
+      is_enterprise_owner: { Args: { user_uuid: string }; Returns: boolean }
       log_audit_event: {
         Args: {
           p_account_id: string
@@ -716,10 +701,7 @@ export type Database = {
         }
         Returns: undefined
       }
-      validate_phone_number: {
-        Args: { phone_text: string }
-        Returns: boolean
-      }
+      validate_phone_number: { Args: { phone_text: string }; Returns: boolean }
       verify_account_owner: {
         Args: { account_uuid: string; user_uuid: string }
         Returns: boolean
